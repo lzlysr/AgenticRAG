@@ -1,0 +1,414 @@
+# Multi-hop QA Synthesis Prompts
+# Adapted from AgenticRAGTracer/multihop_prompt.yaml for news domain
+
+gen_qa_prompt: |
+  You are an information extraction and question generation system.
+
+  # Task:
+  Given a document, extract a set of **atomic, verifiable facts** and convert each into a **QA pair**, where:
+  - The **question** focuses on a specific, retrievable detail from the document.
+  - The **answer** is concise, factual, and directly grounded in the document.
+  - For each document, generate **at most {gen_qa_num} QA pairs**. Prioritize the most concrete, unique, and verifiable facts.
+  - Only generate questions that require consulting the document to answer — avoid trivial facts or common-sense knowledge.
+
+  # Rules for QA Generation
+
+  1. Atomicity
+  - Each QA must be based on a single indivisible fact (no conjunctions).
+    ✖ "A increased and B decreased" → must split into two questions.
+
+  2. Verifiability
+  - The answer must include at least one of:
+    - ✓ Numeric value (e.g., 59.0%)
+    - ✓ Time or date (e.g., 2025/04/28)
+    - ✓ Unique name/entity (e.g., Humpback65B)
+  - ✖ Reject vague expressions: "Performance has improved"
+
+  3. Time specificity
+  - Explicitly mark time ranges when containing time-sensitive information
+  - Examples:
+    ✓ "Global GDP grew by 3.0% in 2023"
+    ✖ "Recent GDP growth of 3.0%"
+
+  4. Relevance and Precision
+  - Avoid abstract questions. Focus on measurable and database-friendly details.
+
+  5. Answer Uniqueness
+  - The question must be **specific enough** to yield a **unique answer** from the document.
+  - ✖ Avoid under-specified questions that allow **multiple correct answers**.
+    - ✖ "What awards did Author X receive?" (if multiple awards are listed in the document)
+    - ✓ "What award did Author X receive in 2022?" (if only one is given for that year)
+  - ✖ Avoid vague superlatives like "notable," "important," "significant" without clear criteria.
+
+  6. Reasoning Preference
+  - Prefer questions that involve causal relationships, temporal sequences, conditional logic, or entity relationships over simple value lookups.
+  - ✓ "Which subsidiary contributed the most to the increase in revenue?"
+  - ✓ "What event caused the decrease in net profit in H1 2025?"
+  - ✓ "Who is the auditor that issued the financial opinion for this company?"
+  - ✖ "What is the ending balance of accounts payable?" (simple table lookup)
+  - ✖ "What was the total operating revenue?" (single-number extraction)
+
+  # Output Format:
+  A JSON array of QA pairs. Each item contains:
+  - `question`: A specific, answerable question.
+  - `answer`: The factual value from the document.
+
+  # Examples
+
+  ```json
+  [
+    {{
+      "question": "What is the number 1 sport in the usa?",
+      "answer": "American football"
+    }},
+    {{
+      "question": "Where did the Ottoman slave trade flourish?",
+      "answer": "In the Balkans"
+    }},
+    {{
+      "question": "Who was president when the white house was built?",
+      "answer": "John Adams"
+    }}
+  ]
+  ```
+
+  The document content to be processed is as follows:
+  {input_doc}
+
+refine_prompt: |
+  You are an AI agent tasked with cleaning and extracting concise answers from original QA pairs.
+  ## Input:
+  You are given a **question** and its corresponding **original answer**. Your task is to extract the most precise and concise information that directly answers the question.
+
+  ## Processing Rules:
+  1. Extract **only** the exact information requested in the question.
+  2. Keep the original index numbering or order if present.
+  3. **Do not** omit essential information.
+  4. **Never add or infer** information not explicitly stated in the original answer.
+  5. Follow strict formatting conventions:
+    - Percentages: use format like `8%` (not "eight percent" or "8 percent")
+    - Currency: use `$1,000` format
+    - Dates: use `YYYY-MM-DD`
+    - Units: include units (e.g., `5kg`, `10cm`)
+  6. For answers that consist of multiple parts or are comparative in nature, multiple core components and comparative statements should be included.
+
+  ## Output Format (JSON):
+  For each input QA pair, output the following JSON object:
+  {{
+    "question": "<original question>",
+    "original_answer": "<original answer>",
+    "refined_answer": "<clean, concise, and direct answer>"
+  }}
+
+  ## Example:
+  Input:
+  question: What edition of the Wightman Cup was held in 1931?
+  original_answer: The 1931 Wightman Cup was its 9th edition.
+
+  Output:
+  {{
+  "question": "What edition of the Wightman Cup was held in 1931?",
+  "original_answer": "The 1931 Wightman Cup was its 9th edition.",
+  "refined_answer": "The 9th edition."
+  }}
+
+  The data need to be processed is as follows:
+  question: {question}
+  original_answer: {original_answer}
+
+merge_qa_prompt_morehop: |
+  You are an expert in constructing multi-hop questions grounded in document-based facts.
+
+  ## Task
+  You are given multiple question-answer-document triples to generate **0 to {max_num}** multi-hop questions that require reasoning over the **latest previous hop** (i.e., the final element in Previous_Hops) together with New_pair. Use Previous_Hops strictly as supporting context: they may be consulted to verify entities/constraints and must be preserved (not removed, weakened, or contradicted) by the final question.
+  Only produce a multi-hop question if it is logically valid, unambiguous, and well-supported by both documents. If there is any uncertainty or weak connection, return empty JSON list instead of forcing a question.
+
+  ## Input Schema
+  Previous_Hops:
+    type: "list of objects (ordered oldest → latest)"
+    each_item:
+      - Hop_number
+      - Question: string
+      - Answer: string
+      - Doc: string
+  New_pair:
+    type: object (This is the candidate QA+Doc to attach to the chain.)
+    fields:
+      - Question: string
+      - Answer: string
+      - Doc: string
+
+  ## Output Format
+  Return a JSON list of up to {max_num} objects. Each object must be in one of the following formats:
+  Valid multi-hop case:
+  {{
+    "type": "inference" | "comparison",
+    "final_question": "...",
+    "final_answer": "..."
+  }}
+
+  If no high quality multi-hop question can be created:
+  Return an empty JSON list []
+
+  ## Types
+  - inference:
+    The final question chains information so that answering it requires (1) the last previous hop's facts and (2) the New_pair's facts. For inference cases, final_answer MUST equal New_pair Answer.
+  - comparison:
+    The final question compares a shared measurable dimension (e.g., date, numeric quantity, size). Both compared values must be supported explicitly in the documents. The answer should be one of the compared entities.
+
+  ## Rules
+  - 1. Use Previous_Hops as supporting context. Do NOT remove, weaken, or contradict any fact, constraint, or entity presented in any Previous_Hops's Question/Answer/Doc.
+  - 2. The final question MUST be generated from (latest Previous_Hop) + (New_pair). DO NOT remove or weaken any Previous_Hops's Question important information in final_question
+  - 3. DO NOT leak intermediate answers (no explicit exposure of any Previous_Hop answer in the final_question).
+  - 4. Do not simply restate the New_pair question, and do not return an unexpanded Hop question that is missing or only partially uses the information from the Previous Hop. The final question MUST depend on all QA-doc pairs to be answerable.
+  - 5. Ensure that there is **sufficient and accurate** evidence to get the answer.
+  - 6. When linking entities across docs, explicitly verify from the document contents (not just question text) that they refer to the exactly same real-world entity or fact
+  - 7. For comparison, only compare facts on the same axis (e.g., date vs date, size vs size), not unrelated attributes.
+  - 8. Do not create final questions that just state multiple facts independently, without a reasoning link between them.
+  - 9. Favor precision and factual grounding over producing more questions. If the logical connection is weak, ambiguous, or speculative, reject (return []).
+  - 10. Output only the final JSON list. Do NOT include chain-of-thought, explanations, or any extra text.
+
+  ## Checklist
+  - [ ] Do all docs describe logically connectable facts?
+  - [ ] For comparison: are both facts from the same measurable dimension?
+  - [ ] For inference: does the reasoning chain correctly lead to New_pair Answer?
+  - [ ] Is the final question truly unanswerable without all QA-doc pairs?
+  - [ ] Are all intermediate answers hidden?
+  - [ ] Are the linked entities explicitly confirmed as the same in both documents?
+  - [ ] Is there sufficient and accurate evidence to get the answer?
+
+  The data need to be processed is as follows:
+  {Data}
+
+  New_pair:
+  Question: {New_question}
+  Answer: {New_answer}
+  Doc: {New_document}
+  Only output the final JSON object. Do not explain your reasoning.
+
+merge_qa_prompt_morehop_comparison: |
+  You are an expert in constructing multi-hop questions grounded in document-based facts.
+
+  ## Task
+  You are given multiple question-answer-document triples to generate **0 to {max_num}** multi-hop questions that require reasoning over the **latest previous hop** (i.e., the final element in Previous_Hops) together with New_pair. Use Previous_Hops strictly as supporting context: they may be consulted to verify entities/constraints and must be preserved (not removed, weakened, or contradicted) by the final question.
+  Only produce a multi-hop question if it is logically valid, unambiguous, and well-supported by both documents. If there is any uncertainty or weak connection, return empty JSON list instead of forcing a question.
+
+  ## Input Schema
+  Previous_Hops:
+    type: "list of objects (ordered oldest → latest)"
+    each_item:
+      - Hop_number
+      - Question: string
+      - Answer: string
+      - Doc: string
+  New_pair:
+    type: object (This is the candidate QA+Doc to attach to the chain.)
+    fields:
+      - Question: string
+      - Answer: string
+      - Doc: string
+
+  ## Output Format
+  Return a JSON list of up to {max_num} objects. Each object must be in one of the following formats:
+  Valid multi-hop case:
+  {{
+    "type": "inference" | "comparison",
+    "final_question": "...",
+    "final_answer": "..."
+  }}
+
+  If no high quality multi-hop question can be created:
+  Return an empty JSON list []
+
+  ## Types
+  - inference:
+    The final question chains information so that answering it requires (1) the last previous hop's facts and (2) the New_pair's facts. For inference cases, final_answer MUST equal New_pair Answer.
+  - comparison:
+    The final question compares a shared measurable dimension (e.g., date, numeric quantity, size). Both compared values must be supported explicitly in the documents. The answer should be one of the compared entities or "Yes"/"No".
+
+  ## Rules
+  - 1. Use Previous_Hops as supporting context. Do NOT remove, weaken, or contradict any fact, constraint, or entity presented in any Previous_Hops's Question/Answer/Doc.
+  - 2. The final question MUST be generated from (latest Previous_Hop) + (New_pair). DO NOT remove or weaken any Previous_Hops's Question important information in final_question.
+  - 3. Do not simply restate the New_pair question, and do not return an unexpanded Hop question that is missing or only partially uses the information from the Previous Hop. The final question MUST depend on all QA-doc pairs to be answerable. The final question MUST be longer than all the previous question.
+  - 4. Ensure that there is **sufficient and accurate** evidence to get the answer.
+  - 5. When linking entities across docs, explicitly verify from the document contents (not just question text) that they refer to the exactly same real-world entity or fact
+  - 6. For comparison, only compare facts on the same axis (e.g., date vs date, size vs size), not unrelated attributes. A comparison MUST include two or more distinct entities rather than a single object.
+  - 7. When constructing final_question, the answer from any previous hop must never be explicitly named in the final_question. Instead, it must be referred to exclusively by its defining role or description from the immediate previous question. Crucially, when the reference involves a comparison, the entire comparative clause (including both entities and the basis for comparison) must be embedded intact to avoid any ambiguity. In order to solve this problem, the final question you formulate must contain "or" or "between".
+  - 8. Do not create final questions that just state multiple facts independently, without a reasoning link between them.
+  - 9. Favor precision and factual grounding over producing more questions. If the logical connection is weak, ambiguous, or speculative, reject (return []).
+  - 10. Output only the final JSON list. Do NOT include chain-of-thought, explanations, or any extra text.
+
+  ## Checklist
+  - [ ] Do all docs describe logically connectable facts?
+  - [ ] For comparison: are both facts from the same measurable dimension?
+  - [ ] For inference: does the reasoning chain correctly lead to New_pair Answer?
+  - [ ] Is the final question truly unanswerable without all QA-doc pairs?
+  - [ ] Are the linked entities explicitly confirmed as the same in both documents?
+  - [ ] Is the final question longer than all the previous question?
+  - [ ] Is there sufficient and accurate evidence to get the answer?
+
+  The data need to be processed is as follows:
+  {Data}
+
+  New_pair:
+  Question: {New_question}
+  Answer: {New_answer}
+  Doc: {New_document}
+  Only output the final JSON object. Do not explain your reasoning.
+
+more_optional_answer_prompt: |
+  You are an expert in **linguistic variation** and **data augmentation**. Your task is to generate a comprehensive list of all plausible and commonly recognized alternative expressions, formats, and aliases for a given input entity or piece of information. The goal is to create high-quality training data that captures diverse ways of referring to the same concept.
+
+  **Key Guidelines:**
+
+  1.  **Equivalence:** Each alternative expression must refer to *exactly the same entity or information* as the original input. Do not include broader categories, narrower sub-types, or related but distinct concepts.
+  2.  **Scope of Variation:** Focus on:
+      * Different **formatting conventions** (e.g., dates, numbers, units).
+      * Common **abbreviations, acronyms, or initialisms**.
+      * Well-known **aliases, nicknames, or shorter forms** in common usage.
+      * Synonyms or rephrasing should *only* be included if they are direct, commonly accepted equivalents.
+  3.  **Context-Agnosticism:** Unless the input itself implies a specific context, generate general-purpose variations. Avoid creating variations that are only valid in very niche or obscure contexts.
+  4.  **Inclusion of Original:** Always include the original input as the first item in the generated list.
+  5.  **Format:** Output the variations as a JSON list of strings.
+
+  Input: {refined_answer}
+  Please list the most common and distinct textual expressions that have the same meaning or refer to the same entity, especially in different formats (e.g., dates, names, abbreviations).
+  Generate at most 15 alternative expressions. Focus on the most common and distinct variants only.
+  Do not include trivial variations like adding/removing spaces, punctuation, or parentheses.
+  Respond with a JSON list of strings. Do not explain.
+
+inference_check_prompt: |
+  You are a multi-hop QA verification system.
+
+  ## Task
+  You are given a multi-hop QA construction based on two question-answer-document triples:
+  (Question1, Answer1, Doc1) and (Question2, Answer2, Doc2), and a final multi-hop QA:
+  - Final_question
+  - Final_answer
+  - type: "inference"
+
+  Your job is to **verify whether the final QA is logically valid** according to the reasoning paths and documents.
+
+  ## Output Format
+  Return a JSON object:
+  {{
+    "valid": "true" | "false",
+    "error_type": "bad_linkage" | "entity_false_link" | "trivial_concatenation" | "other",
+    "justification": "Short explanation of the issue"
+  }}
+
+  ## Definitions & Rules
+  - "inference": Final question requires combining QA1 and QA2 in a reasoning chain. The final_answer must exactly match Answer2. No intermediate answers should appear in final_question.
+  - "bad_linkage": If the two QA-doc pairs contain unrelated facts that are superficially similar but logically disconnected.
+  - "entity_false_link": a false connection between two facts or documents that arises solely because different entities share identical or highly similar names, without any actual semantic or factual relationship.
+  - "trivial_concatenation": If the final question is formed by simply joining two or more independent facts into a single sentence without any logical reasoning.
+  - "other": Other errors.
+
+  The data need to be processed is as follows:
+  Question1: {Question1}
+  Answer1: {Answer1}
+  Doc1:{Document1}
+  Question2: {Question2}
+  Answer2: {Answer2}
+  Doc2:{Document2}
+  Final_question:{Final_question}
+  Final_answer:{Final_answer}
+  type:{qa_type}
+  Only return the JSON object as described. Do not include explanations unless requested.
+
+comparison_check_prompt: |
+  You are a multi-hop QA verification system.
+
+  ## Task
+  You are given two question-answer-document triples:
+  (Question1, Answer1, Doc1) and (Question2, Answer2, Doc2), plus a final multi-hop QA:
+  - Final_question
+  - Final_answer
+  - type: "comparison"
+
+  Your job is to **verify whether the final QA is logically valid** according to the reasoning paths and documents.
+
+  ## Output Format
+  Return a JSON object:
+  {{
+    "valid": "true" | "false",
+    "error_type": "forced_pairing" | "lacking_evidence" | "trivial_concatenation" | "other",
+    "justification": "Short explanation of the issue"
+  }}
+
+  ## Definitions & Rules
+  - "comparison": Final question compares a **shared attribute/dimension** between two entities derived from QA1 and QA2.
+  - "forced_pairing": The two QA-doc pairs do not share a meaningful, comparable dimension.
+  - "lacking_evidence": One or both compared values are not explicitly supported in the provided documents.
+  - "trivial_concatenation": The final question simply joins two facts without logical comparing.
+  - "other": Other errors.
+
+  The data need to be processed is as follows:
+  Question1: {Question1}
+  Answer1: {Answer1}
+  Doc1: {Document1}
+  Question2: {Question2}
+  Answer2: {Answer2}
+  Doc2: {Document2}
+  Final_question: {Final_question}
+  Final_answer: {Final_answer}
+  type: {qa_type}
+  Only return the JSON object as described. Do not include explanations unless requested.
+
+reasoning_prompt: |
+  Please solve the following problem and return result. Ensure responses are as concise as possible, focusing only on key information while omitting redundant details.
+  The problem is:
+  {problem}
+
+comparison_reasoning_prompt: |
+  Please solve the following problem and return result.
+  For comparison question, if you are unsure of the answer, please do not guess or choose randomly. Instead, return "I cannot answer this question."
+  The problem is:
+  {problem}
+  Ensure responses are as concise as possible, focusing only on key information while omitting redundant details.
+
+singlehop_prompt: |
+  You are given the following document that contains relevant information to help answer a question.
+  Document:
+  {Document}
+  Question:
+  {Question}
+  Please answer the question using the information in the provided document. Ensure responses are as concise as possible, focusing only on key information while omitting redundant details.
+  If you cannot answer the question, return "I cannot answer this question. <the reason why cannot answer this question>".
+
+multihop_inference_prompt_morehop: |
+  You are an expert at solving problems. Now you need to solve a multi-hop inference problem.
+  Multi-hop inference problem: a question that requires combining information from multiple sources in a logical chain to reach an answer.
+
+  ## Now you are given some supporting fact to help answer a question.
+  {Data}
+  FinalQuestion: {FinalQuestion}
+  Now you need solve the problem and return result. Ensure responses are as concise as possible, focusing only on key information while omitting redundant details.
+
+multihop_comparison_prompt_morehop: |
+  You are an expert at solving problems. Now you need to solve a multi-hop comparison problem.
+  Multi-hop comparison problem: a question that requires retrieving and comparing information from multiple sources to determine a relative fact.
+
+  ## Now you are given some supporting fact to help answer a question.
+  {Data}
+  FinalQuestion: {FinalQuestion}
+  Now you need solve the problem and return result. Ensure responses are as concise as possible, focusing only on key information while omitting redundant details.
+
+EssEq_prompt: |
+  You are an expert evaluator. Evaluate whether the OTHER ANSWER preserves **all essential information** in the GOLDEN ANSWER, **with respect to the QUESTION**.
+
+  # Scoring Criteria
+  - **2 points** → OTHER ANSWER is fully equivalent to the GOLDEN ANSWER. Same meaning, even if reworded or paraphrased.
+  - **1 point** → OTHER ANSWER includes ALL key information from the GOLDEN ANSWER but adds extra non-contradictory information.
+  - **0 points** → OTHER ANSWER is missing critical information or introduces incorrect/contradictory information.
+
+  Always consider what the QUESTION is asking when judging whether information is essential.
+
+  # Output Format:
+  Return ONLY JSON, no extra text.
+  ```json
+  {
+    "answer_reason": "reason for the score",
+    "answer_score": 0/1/2
+  }
+  ```

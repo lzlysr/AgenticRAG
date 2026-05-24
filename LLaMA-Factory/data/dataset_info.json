@@ -1,0 +1,31 @@
+{
+  "financial_agent_react": {
+    "file_name": "lf_react.jsonl",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content",
+      "user_tag": "user",
+      "assistant_tag": "assistant",
+      "observation_tag": "tool"
+    }
+  },
+  "financial_agent_zh_react": {
+    "file_name": "/share/project/kouqian/Codes/cv_agenticrag/core/data/financial_eval/sft_zh_llamafactory/lf_react.jsonl",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content",
+      "user_tag": "user",
+      "assistant_tag": "assistant",
+      "observation_tag": "tool",
+      "system_tag": "system"
+    }
+  }
+}

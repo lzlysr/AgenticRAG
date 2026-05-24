@@ -1,0 +1,43 @@
+### model
+model_name_or_path: /share/project/common/models/models/Qwen/Qwen3-4B
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 64
+lora_target: all
+
+### dataset
+dataset: financial_agent_zh_react
+template: qwen3_nothink
+cutoff_len: 2048
+overwrite_cache: true
+preprocessing_num_workers: 16
+dataset_dir: ${LLAMA_FACTORY_DATA:-./data}
+
+### output
+output_dir: ${PROJECT_DIR}/training/outputs/qwen3-4b-sft-zh-react
+logging_steps: 5
+save_steps: 45
+plot_loss: true
+overwrite_output_dir: true
+report_to: none
+
+### train
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 8
+learning_rate: 1.0e-4
+num_train_epochs: 3.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: false
+fp16: true
+ddp_timeout: 180000000
+
+### eval
+val_size: 0.1
+per_device_eval_batch_size: 2
+eval_strategy: steps
+eval_steps: 45

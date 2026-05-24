@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+training/outputs/
+results/
+tmp/
+*.log
+nohup.out
+models/
+data/financial_all/indexes/entity_embeddings.pkl

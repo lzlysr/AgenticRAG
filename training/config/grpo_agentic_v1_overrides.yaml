@@ -1,0 +1,9 @@
+data:
+  train_files: ${PROJECT_DIR}/data/financial_eval/grpo_agentic_train.parquet
+  val_files: ${PROJECT_DIR}/data/financial_eval/grpo_agentic_val.parquet
+  train_batch_size: 32
+  max_prompt_length: 1024
+  max_response_length: 3072
+  filter_overlong_prompts: true
+  truncation: error
+  return_raw_chat: true

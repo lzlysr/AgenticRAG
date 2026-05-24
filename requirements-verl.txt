@@ -1,0 +1,23 @@
+# ============================================================
+# 环境 2: verl — GRPO 训练 + vLLM 推理服务
+# conda create -n verl python=3.12
+# pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+# pip install -r requirements-verl.txt
+# ============================================================
+
+# GRPO 训练框架
+# cd verl && pip install -e .
+
+# vLLM 推理引擎
+vllm==0.11.0
+
+# Flash Attention（GRPO 训练加速）
+# 需要 CUDA Toolkit 12.4+ 和 GCC 12+
+# pip install flash-attn==2.6.3 --no-build-isolation
+
+# Reward 函数依赖
+openai>=1.35.0
+numpy>=1.24.0
+
+# Retrieval Server 依赖（GRPO rollout 时提供检索服务）
+sentence-transformers>=2.2.0

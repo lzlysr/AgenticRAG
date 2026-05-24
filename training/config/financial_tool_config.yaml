@@ -1,0 +1,90 @@
+tools:
+  - class_name: training.tools.financial_search_tool.KeywordSearchTool
+    config:
+      index_dir: ${PROJECT_DIR}/data/financial_all/indexes
+      top_k: 3
+      max_text_len: 300
+      retrieval_server_url: "http://localhost:8790"
+      type: native
+    tool_schema:
+      type: function
+      function:
+        name: keyword_search
+        description: 使用关键词匹配（BM25）搜索金融文档
+        parameters:
+          type: object
+          properties:
+            query:
+              type: string
+              description: 搜索查询关键词
+          required:
+            - query
+
+  - class_name: training.tools.financial_search_tool.SemanticSearchTool
+    config:
+      index_dir: ${PROJECT_DIR}/data/financial_all/indexes
+      top_k: 3
+      max_text_len: 300
+      retrieval_server_url: "http://localhost:8790"
+      type: native
+    tool_schema:
+      type: function
+      function:
+        name: semantic_search
+        description: 使用语义向量检索金融文档
+        parameters:
+          type: object
+          properties:
+            query:
+              type: string
+              description: 语义搜索查询
+          required:
+            - query
+
+  - class_name: training.tools.financial_search_tool.GraphSearchTool
+    config:
+      index_dir: ${PROJECT_DIR}/data/financial_all/indexes
+      top_k: 3
+      max_text_len: 300
+      retrieval_server_url: "http://localhost:8790"
+      type: native
+    tool_schema:
+      type: function
+      function:
+        name: graph_search
+        description: 使用知识图谱搜索金融文档中的实体关系
+        parameters:
+          type: object
+          properties:
+            query:
+              type: string
+              description: 实体关系查询
+          required:
+            - query
+
+  - class_name: training.tools.financial_search_tool.HybridSearchTool
+    config:
+      index_dir: ${PROJECT_DIR}/data/financial_all/indexes
+      top_k: 3
+      max_text_len: 300
+      retrieval_server_url: "http://localhost:8790"
+      type: native
+    tool_schema:
+      type: function
+      function:
+        name: hybrid_search
+        description: 使用多个工具进行 RRF 融合检索并重排
+        parameters:
+          type: object
+          properties:
+            query:
+              type: string
+              description: 搜索查询
+            tools:
+              type: array
+              items:
+                type: string
+              description: 要融合的工具列表，如 ["keyword_search", "semantic_search"]
+          required:
+            - query
+            - tools
