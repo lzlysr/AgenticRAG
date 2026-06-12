@@ -1,6 +1,10 @@
 """全局配置 — 所有路径支持环境变量覆盖"""
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 # 模型路径（环境变量覆盖）
@@ -15,13 +19,13 @@ RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
 TMP_DIR = os.path.join(PROJECT_ROOT, "tmp")
 
 # Agent 推理模型（环境变量覆盖）
-AGENT_LLM_MODEL = os.environ.get("AGENT_LLM_MODEL", "Qwen3-32B")
+AGENT_LLM_MODEL = os.environ.get("AGENT_LLM_MODEL", "Qwen3-4B")
 # Prompt 语言：en / zh
 PROMPT_LANG = os.environ.get("PROMPT_LANG", "zh")
-# 评测 Judge 用
-JUDGE_LLM_MODEL = os.environ.get("JUDGE_LLM_MODEL", "gpt-oss-120b")
-# 数据合成用
-SYNTH_LLM_MODEL = os.environ.get("SYNTH_LLM_MODEL", "gpt-oss-120b")
+# 评测 Judge 用：填写 llm/client.py 中 MODEL_CONFIGS 的 key
+JUDGE_LLM_MODEL = os.environ.get("JUDGE_LLM_MODEL", "deepseek-v4-flash")
+# 数据合成用：填写 llm/client.py 中 MODEL_CONFIGS 的 key
+SYNTH_LLM_MODEL = os.environ.get("SYNTH_LLM_MODEL", "deepseek-v4-flash")
 
 # 检索参数
 RERANK_TOP_K = 5

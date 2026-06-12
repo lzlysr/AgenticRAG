@@ -7,6 +7,7 @@
   VLLM_BASE_URL     — 本地 Agent 模型地址 (默认 http://localhost:9097/v1)
   VLLM_32B_URL      — 32B 大模型地址 (默认 http://localhost:9094/v1)
   JUDGE_BASE_URL    — Judge 模型地址 (默认 http://localhost:8086/v1)
+  DEEPSEEK_API_KEY  — DeepSeek API Key
   AGENT_LLM_MODEL   — Agent 默认模型名
   JUDGE_LLM_MODEL   — Judge 默认模型名
 
@@ -36,6 +37,7 @@ logger = logging.getLogger(__name__)
 VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://localhost:9097/v1")
 VLLM_32B_URL = os.environ.get("VLLM_32B_URL", "http://localhost:9094/v1")
 JUDGE_BASE_URL = os.environ.get("JUDGE_BASE_URL", "http://localhost:8086/v1")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -88,6 +90,12 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     "gpt-oss-120b": ModelConfig(
         url=JUDGE_BASE_URL,
         model_name="gpt-oss-120b",
+        max_len=131072,
+    ),
+    "deepseek-v4-flash": ModelConfig(
+        url="https://api.deepseek.com",
+        model_name="deepseek-v4-flash",
+        api_key=DEEPSEEK_API_KEY,
         max_len=131072,
     ),
 }
@@ -166,6 +174,9 @@ def get_from_llm(
     Returns:
         模型回复文本，失败返回 None
     """
+    # 兼容旧脚本：历史接口用 model=... 指定模型。
+    model_name = kwargs.pop("model", model_name)
+
     if model_name not in MODEL_CONFIGS:
         raise ValueError(
             f"Unknown model: {model_name}. "
