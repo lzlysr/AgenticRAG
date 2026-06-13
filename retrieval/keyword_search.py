@@ -10,23 +10,24 @@ import jieba
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import ACTIVE_INDEX_DIR as INDEX_DIR, BM25_TOP_K
 
-_bm25 = None
-_chunk_ids = None
-_chunk_store = None
+_bm25 = None # BM25 检索模型
+_chunk_ids = None # 下标到 chunk_id 的映射
+_chunk_store = None # chunk_id 到完整文本的映射
 
 
 def tokenize(text: str) -> list[str]:
     """中英文混合分词：jieba 切中文，空格切英文/数字"""
     text = text.lower()
-    # 按中文和非中文边界拆分
+    # 初步切分：按中文和非中文边界拆分，把文本切成一些初步片段。
     segments = re.findall(r'[\u4e00-\u9fff]+|[a-z0-9]+(?:\.[0-9]+)*', text)
     tokens = []
+    # 细切分：对每个片段，如果是中文就用 jieba 切词；如果不是中文就直接当成一个 token。
     for seg in segments:
         if re.match(r'[\u4e00-\u9fff]', seg):
             tokens.extend(jieba.lcut(seg))
         else:
             tokens.append(seg)
-    return [t for t in tokens if len(t.strip()) > 0]
+    return [t for t in tokens if len(t.strip()) > 0] # 把空字符串去掉。
 
 
 def _load():

@@ -30,7 +30,7 @@ fastapi>=0.100.0
 uvicorn>=0.23.0
 
 # PDF 解析（可选，仅语料提取时需要）
-# PyMuPDF>=1.23.0
+PyMuPDF>=1.23.0
 
 # SFT 训练（在 agenticrag 环境中安装）
 # cd LLaMA-Factory && pip install -e .

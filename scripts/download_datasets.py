@@ -8,6 +8,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import DATA_DIR
 
 DATASET_NAME = "YqjMartin/AgenticRAGTracer"
+# 多跳推理（Multi-hop Reasoning）是一种复杂的推理技术，要求模型在回答问题或解决任务时，跨越多个信息片段或知识点，逐步推导出最终答案，而非直接从单一信息源中获取结果。每次跨越称为一个“跳跃”（hop）。
+# hop 数量表示问题需要几跳推理，comparison/inference 表示问题类型（对比推理 vs 直接推理）。共 6 个子集。
 SUBSETS = [
     "2hop_comparison", "2hop_inference",
     "3hop_comparison", "3hop_inference",
@@ -16,11 +18,15 @@ SUBSETS = [
 
 
 def _doc_hash(text: str) -> str:
+    """根据文档内容生成一个短 ID，作为 chunk_id。"""
+    # text.encode() 把字符串转成字节。.hexdigest() 把哈希值转成十六进制字符串。
+    # 为什么用文档内容做 hash？因为同一文档无论在哪个问题中出现，内容相同就应该对应同一个 chunk_id，这样索引和检索才有效。如果用随机 ID，每次出现都不一样，就无法正确匹配了。
     return hashlib.md5(text.encode()).hexdigest()[:12]
 
 
 def download_and_process():
     """下载所有子集，提取语料库和 QA 对"""
+    # load_dataset 用来从 HuggingFace 下载数据集
     from datasets import load_dataset
 
     corpus = {}  # chunk_id -> {"chunk_id", "text", "title"}
@@ -28,7 +34,7 @@ def download_and_process():
 
     for subset in SUBSETS:
         print(f"[download] Loading {subset}...")
-        ds = load_dataset(DATASET_NAME, subset, split="test")
+        ds = load_dataset(DATASET_NAME, subset, split="test") # test: 直接拿到测试集
 
         for row in ds:
             hop_count = int(subset[0])  # 2, 3, or 4
@@ -46,6 +52,7 @@ def download_and_process():
                 doc_text = hop_data.get("doc", "")
                 if doc_text:
                     cid = _doc_hash(doc_text)
+                    # 如果 corpus 中还没有这个 chunk_id，就添加进去。这样同一文档无论在哪个问题中出现，内容相同就对应同一个 chunk_id。
                     if cid not in corpus:
                         corpus[cid] = {
                             "chunk_id": cid,
@@ -74,6 +81,7 @@ def download_and_process():
     corpus_path = os.path.join(DATA_DIR, "corpus.json")
     qa_path = os.path.join(DATA_DIR, "qa_pairs.json")
 
+    # 把 corpus_list 这个 Python 列表保存成 JSON 文件。
     with open(corpus_path, "w", encoding="utf-8") as f:
         json.dump(corpus_list, f, ensure_ascii=False, indent=2)
     with open(qa_path, "w", encoding="utf-8") as f:

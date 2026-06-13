@@ -1,18 +1,21 @@
-"""从 corpus.json 构建知识图谱：LLM 抽取三元组 → NetworkX 图 → 持久化"""
+"""
+从 corpus.json 构建知识图谱：LLM 抽取三元组 → NetworkX 图 → 持久化
+可选：预计算实体 embedding 供后续检索使用，保存 entity_embeddings.pkl
+把原本文本 chunk 里的事实，变成一个“实体—关系—实体”的图结构
+"""
 import argparse
 import json
 import os
 import pickle
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed # 多线程并行调用 LLM 抽三元组
 from threading import Lock
 
-import networkx as nx
+import networkx as nx # 图结构处理库
 import numpy as np
 from tqdm import tqdm
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 项目根目录
 from config import DATA_DIR, INDEX_DIR, SYNTH_LLM_MODEL
 
@@ -66,7 +69,7 @@ def _get_extraction_prompt(lang=None):
 
 def extract_triples_from_chunk(chunk: dict, model: str) -> list[dict]:
     """对单个 chunk 调用 LLM 抽取三元组"""
-    from llm.client import get_from_llm as get_from_ks_openai
+    from llm.client import get_from_llm
 
     text = chunk["text"]
     if len(text.strip()) < 50:
@@ -76,12 +79,16 @@ def extract_triples_from_chunk(chunk: dict, model: str) -> list[dict]:
 
     for attempt in range(3):
         try:
-            resp = get_from_ks_openai(prompt, model=model)
+            resp = get_from_llm(prompt, model=model)
             if not resp:
                 continue
 
             # 解析 JSON
             import re
+            # 先尝试提取 返回结果里包着 Markdown 代码块的 JSON，例如：
+            # ```json
+            # [{"head": "A", "relation": "是", "tail": "B"}]
+            # ```
             m = re.search(r"```(?:json)?\s*\n?(.*?)```", resp, re.DOTALL)
             if m:
                 resp = m.group(1).strip()
@@ -135,6 +142,7 @@ def process_chunk(chunk: dict, model: str) -> list[dict]:
 
 def build_graph(all_triples: list[dict]) -> nx.MultiDiGraph:
     """从三元组列表构建 NetworkX 有向多重图"""
+    # 为什么用多重图？因为两个实体之间可能有多种关系。MultiDiGraph 可以保存多条边。
     G = nx.MultiDiGraph()
 
     for t in all_triples:
@@ -145,7 +153,9 @@ def build_graph(all_triples: list[dict]) -> nx.MultiDiGraph:
 
         # 添加/更新节点
         if not G.has_node(head):
-            G.add_node(head, mentions=[])
+            # mentions 属性记录这个实体在哪些 chunk 中被提到，方便后续检索时定位原文
+            G.add_node(head, mentions=[]) 
+        # 把当前 chunk_id 加进去。如果一个实体在多个 chunk 中被提到，就会有多个 chunk_id。
         if chunk_id not in G.nodes[head]["mentions"]:
             G.nodes[head]["mentions"].append(chunk_id)
 
@@ -162,6 +172,7 @@ def build_graph(all_triples: list[dict]) -> nx.MultiDiGraph:
 
 def save_graph(G: nx.MultiDiGraph, output_path: str):
     """将图保存为 JSON（node_link_data 格式）"""
+    # NetworkX 图不能直接保存成 JSON，所以先转成：
     data = nx.node_link_data(G)
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -183,6 +194,7 @@ def compute_entity_embeddings(G: nx.MultiDiGraph, output_path: str):
         emb = encode(batch, batch_size=batch_size)
         all_embeddings.append(emb)
 
+    # vstack 合并成一个矩阵
     embeddings = np.vstack(all_embeddings)  # (N, D)
 
     # 保存为 {entity_name: index} 映射 + embedding 矩阵
@@ -203,7 +215,7 @@ def print_graph_stats(G: nx.MultiDiGraph):
     print(f"Nodes (entities): {G.number_of_nodes()}")
     print(f"Edges (triples):  {G.number_of_edges()}")
 
-    # 度分布
+    # 度分布 图里的度表示一个节点连了多少条边。如果最大度很高，说明某些实体是中心节点。
     degrees = [d for _, d in G.degree()]
     if degrees:
         print(f"Avg degree: {np.mean(degrees):.1f}")
@@ -220,13 +232,13 @@ def print_graph_stats(G: nx.MultiDiGraph):
         if len(sizes) > 1:
             print(f"Top 5 component sizes: {sizes[:5]}")
 
-    # chunk 覆盖
+    # chunk 覆盖  表示有多少个 chunk 至少抽出了一个三元组
     all_chunks = set()
     for _, _, data in G.edges(data=True):
         all_chunks.add(data.get("chunk_id"))
     print(f"Chunks covered: {len(all_chunks)}")
 
-    # 关系类型分布
+    # 关系类型分布 如果关系类型特别多、每种只出现一两次，说明关系没有标准化。
     relations = {}
     for _, _, data in G.edges(data=True):
         rel = data.get("relation", "unknown")
@@ -317,3 +329,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# 测试
+# python scripts/build_knowledge_graph.py   --corpus data/datasets/corpus.json   --output-graph data/indexes/test_knowledge_graph.json   --output-embeddings data/indexes/entity_embeddings.pkl   --triples-cache data/indexes/test_triples_cache.jsonl   --model deepseek-v4-flash   --workers 20   --limit 5   --skip-embeddings

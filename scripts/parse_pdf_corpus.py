@@ -36,6 +36,7 @@ def detect_section_title(text: str) -> str | None:
         r"^\([一二三四五六七八九十]+\)\s*.+",
         r"^\d+、\s*.+",
     ]
+    # 取当前页第一行
     first_line = text.split("\n")[0].strip()
     for p in patterns:
         if re.match(p, first_line):
@@ -49,11 +50,11 @@ def chunk_pages(pages: list[dict], chunk_size: int = 500,
 
     策略：按段落分割，尽量不切断段落；超长段落强制切割
     """
-    chunks = []
-    chunk_id = 0
-    current_text = ""
-    current_section = ""
-    current_pages = []
+    chunks = [] # 保存最终所有 chunk
+    chunk_id = 0 # 当前 chunk 编号
+    current_text = "" # 当前正在拼接的文本 buffer
+    current_section = "" # 当前章节标题
+    current_pages = [] # 当前 chunk 涉及哪些页
 
     for page_info in pages:
         text = page_info["text"]
@@ -74,23 +75,25 @@ def chunk_pages(pages: list[dict], chunk_size: int = 500,
 
             # 如果当前 buffer + 新段落不超限，追加
             if len(current_text) + len(para) <= chunk_size:
+                # 如果 current_text 已经有内容，就先加一个换行；如果是空的，就不加换行。
                 current_text += ("\n" if current_text else "") + para
                 if page_num not in current_pages:
                     current_pages.append(page_num)
             else:
-                # 保存当前 chunk
+                # 超限：先保存当前旧的 current_text，再处理新来的 para
                 if current_text and len(current_text) >= 50:  # 最小长度
                     chunks.append({
                         "chunk_id": f"fin_{chunk_id:04d}",
                         "text": current_text,
                         "title": f"{doc_title} - {current_section}" if current_section else doc_title,
-                        "pages": current_pages[:],
+                        "pages": current_pages[:], # 复制当前页码列表，避免后面修改影响已保存的 chunk。
                         "section": current_section,
                     })
                     chunk_id += 1
 
-                # 如果段落本身超长，强制切割
-                if len(para) > chunk_size:
+                # 如果当前段落 para 本身超长，强制切割
+                if len(para) > chunk_size: 
+                    # 步长是 chunk_size - overlap，保证切块之间有重叠部分，便于后续检索时上下文连续。
                     for start in range(0, len(para), chunk_size - overlap):
                         sub = para[start:start + chunk_size]
                         if len(sub) >= 50:
@@ -102,14 +105,18 @@ def chunk_pages(pages: list[dict], chunk_size: int = 500,
                                 "section": current_section,
                             })
                             chunk_id += 1
+                    # 超长段落处理完后为什么清空？
+                    # 因为这个段落已经被切成多个 chunk 保存了，后续的段落应该另起一个新的 chunk 来拼接，而不是继续追加到 current_text。
                     current_text = ""
                     current_pages = []
+                # 如果 para 自己不长，只是 current_text + para 后会超长：
                 else:
-                    # overlap: 保留上一段最后部分
+                    # 上一步保存旧 chunk 后，用当前段落 para 开启一个新的 chunk。
                     current_text = para
                     current_pages = [page_num]
 
     # 最后一个 chunk
+    # 最后一个 chunk 为什么要单独保存？因为循环结束后 current_text 里可能还有内容没有保存，如果不单独保存，就会丢失最后一部分文本。
     if current_text and len(current_text) >= 50:
         chunks.append({
             "chunk_id": f"fin_{chunk_id:04d}",
