@@ -11,4 +11,4 @@ tmp/
 *.log
 nohup.out
 models/
-data/financial_all/indexes/entity_embeddings.pkl
+/test.ipynb
