@@ -1,4 +1,7 @@
-"""LLM 调用封装：用于多跳 QA 合成 pipeline，基于 mog-1 (GPT-5) via KS API"""
+"""
+LLM 调用封装：
+服务离线数据合成的大规模并发、JSON 解析、重试和统计。用于多跳 QA 合成 pipeline，基于 mog-1 (GPT-5) via KS API
+"""
 import json
 import re
 import time
@@ -7,7 +10,6 @@ import logging
 import sys
 import os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 项目根目录
 
 logger = logging.getLogger("synthesis")
@@ -17,17 +19,19 @@ _stats_lock = threading.Lock()
 _stats = {"calls": 0, "errors": 0, "total_latency": 0.0}
 
 # ---------- 并发控制 ----------
+# 并发信号量。用于限制同一时刻真正调用 LLM API 的请求数量。
 _semaphore = None
 
 
 def init_concurrency(max_concurrent: int = 20):
-    """初始化并发信号量"""
+    """初始化并发信号量。最多允许 20 个线程同时进入真正的 LLM 调用。"""
     global _semaphore
     _semaphore = threading.Semaphore(max_concurrent)
 
 
 def get_stats() -> dict:
     with _stats_lock:
+        # 返回浅拷贝，外部修改不会影响内部统计
         return dict(_stats)
 
 
@@ -47,10 +51,6 @@ def _record_call(latency: float, error: bool = False):
 
 
 # ---------- JSON 解析 ----------
-def _clean_json_block(text: str) -> str:
-    return text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-
-
 def _extract_json(text: str):
     """从 LLM 回复中提取 JSON"""
     if not text:
@@ -59,10 +59,11 @@ def _extract_json(text: str):
     if m:
         text = m.group(1).strip()
     try:
+        # 如果文本本身已经是合法 JSON，直接解析并返回
         return json.loads(text)
     except json.JSONDecodeError:
         pass
-    # 尝试找 [] 或 {}
+    # 如果文本不是纯 JSON，尝试从中提取第一个 JSON 对象或数组进行解析
     for start_c, end_c in [('[', ']'), ('{', '}')]:
         idx_s = text.find(start_c)
         idx_e = text.rfind(end_c)
@@ -75,11 +76,13 @@ def _extract_json(text: str):
 
 
 # ---------- 核心调用 ----------
-def llm_call(prompt: str, model: str = "gpt-oss-120b", temperature: float = 0.7,
+def llm_call(prompt: str, model: str = "deepseek-v4-flash", temperature: float = 0.7,
              system_prompt: str = "You are a helpful assistant.",
              timeout: int = 200) -> str:
     """单次 LLM 调用（带并发控制，统一走 llm.client）"""
+    # 把全局信号量保存到局部变量。
     sem = _semaphore
+    # 如果有信号量，先申请一个名额。
     if sem:
         sem.acquire()
     try:
@@ -93,11 +96,12 @@ def llm_call(prompt: str, model: str = "gpt-oss-120b", temperature: float = 0.7,
         raise
     finally:
         if sem:
+            # 无论如何释放信号量
             sem.release()
 
 
 def llm_call_with_retry(prompt: str, max_retries: int = 3,
-                        model: str = "mog-1", temperature: float = 0.7,
+                        model: str = "deepseek-v4-flash", temperature: float = 0.7,
                         return_json: bool = False,
                         timeout: int = 200) -> str | dict | list | None:
     """带重试的 LLM 调用，可选 JSON 解析"""
@@ -127,8 +131,11 @@ def llm_call_with_retry(prompt: str, max_retries: int = 3,
 
 
 def llm_judge(question: str, golden_answer: str, other_answer: str,
-              judge_prompt: str, model: str = "mog-1") -> dict:
-    """EssEq 评分：判断 other_answer 是否等价于 golden_answer"""
+              judge_prompt: str, model: str = "deepseek-v4-flash") -> dict:
+    """
+    给定问题、标准答案和另一个答案，让 LLM 判断两个答案语义是否等价。
+    EssEq 评分：判断 other_answer 是否等价于 golden_answer
+    """
     prompt = f"Input:\nQuestion: {question}\nGolden answer: {golden_answer}\nOther answer: {other_answer}"
     result = llm_call_with_retry(
         prompt=f"{judge_prompt}\n\n{prompt}",
@@ -140,6 +147,7 @@ def llm_judge(question: str, golden_answer: str, other_answer: str,
         return {"avg_score": 0, "reasons": [], "raw_scores": []}
     if isinstance(result, list):
         result = result[0] if result else {}
+    # 为什么分数和理由使用列表？因为有些评测可能会给出多个维度的评分和理由，比如准确性、完整性、流畅性等。或者是兼容多评委模式。
     return {
         "avg_score": result.get("answer_score", 0),
         "reasons": [result.get("answer_reason", "")],

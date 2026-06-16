@@ -113,6 +113,8 @@ class LLMStats:
         self.total_latency = 0.0
 
     def record(self, kind: str, latency: float):
+        # 记录一次调用。只在 agent_chat 和 judge_chat 中调用，kind 分别为 "agent" 或 "judge"。
+        # 直接走get_from_llm()，不会记录到 client.py.stats。
         with self._lock:
             if kind == "agent":
                 self.agent_calls += 1
@@ -126,6 +128,7 @@ class LLMStats:
             self.total_latency = 0.0
 
     def snapshot(self) -> dict:
+        # 获取快照
         with self._lock:
             return {
                 "agent_calls": self.agent_calls,
@@ -174,7 +177,7 @@ def get_from_llm(
     Returns:
         模型回复文本，失败返回 None
     """
-    # 兼容旧脚本：历史接口用 model=... 指定模型。
+    # 兼容旧脚本：历史接口用 model=... 指定模型。如果 kwargs 里传了 model，就用它覆盖 model_name。
     model_name = kwargs.pop("model", model_name)
 
     if model_name not in MODEL_CONFIGS:
