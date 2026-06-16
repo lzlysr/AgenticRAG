@@ -16,6 +16,7 @@ def _get_model(device: str = None):
     with _global_lock:
         if device not in _models:
             from sentence_transformers import CrossEncoder
+            # CrossEncoder 把两个文本一起输入模型，并直接输出它们相关性分数的模型结构。
             _models[device] = CrossEncoder(BGE_RERANKER_PATH, max_length=512, device=device)
             _locks[device] = Lock()
             print(f"[reranker] Loaded BGE-reranker on {device}")
@@ -29,6 +30,7 @@ def rerank(query: str, passages: list[str], top_k: int = RERANK_TOP_K, device: s
     model, lock = _get_model(device)
     with lock:
         scores = model.predict([[query, p] for p in passages])
+    # enumerate() 给每个分数带上原始 passage 下标。
     indexed = list(enumerate(scores))
     indexed.sort(key=lambda x: x[1], reverse=True)
     return indexed[:top_k]
