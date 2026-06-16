@@ -16,7 +16,7 @@ _chunk_store = None # chunk_id 到完整文本的映射
 
 
 def tokenize(text: str) -> list[str]:
-    """中英文混合分词：jieba 切中文，空格切英文/数字"""
+    """中英文混合分词：jieba 切中文，正则切英文/数字"""
     text = text.lower()
     # 初步切分：按中文和非中文边界拆分，把文本切成一些初步片段。
     segments = re.findall(r'[\u4e00-\u9fff]+|[a-z0-9]+(?:\.[0-9]+)*', text)
@@ -45,6 +45,8 @@ def keyword_search(query: str, top_k: int = BM25_TOP_K) -> list[dict]:
     """BM25 关键字检索 + reranker 重排序，返回 [{"chunk_id", "text", "title", "score"}]"""
     _load()
     tokens = tokenize(query)
+    # get_scores 返回的是一个 NumPy 数组，长度等于语料库里的 chunk 数量。
+    # 这个数组的下标和 chunk_ids.json 的下标一一对应
     scores = _bm25.get_scores(tokens)
     top_indices = scores.argsort()[-top_k:][::-1]
 
@@ -67,6 +69,34 @@ def keyword_search(query: str, top_k: int = BM25_TOP_K) -> list[dict]:
         from retrieval.reranker import rerank
         passages = [r["text"] for r in results]
         reranked = rerank(query, passages, top_k=5)
-        results = [results[idx] for idx, _ in reranked]
+        # 从返回结果看，分数score可能不是降序的，因为它们仍然是 BM25 分数，而排序已经变成 reranker 分数排序。因此修改分数为 reranker 分数。
+        results = [
+            {
+                **results[idx],
+                "score": float(rerank_score),
+                "source": "bm25+rerank",
+            }
+            for idx, rerank_score in reranked
+        ]
 
     return results
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run a BM25 keyword search smoke test.")
+    parser.add_argument("query", nargs="?", default="Scott Derrickson Ed Wood nationality")
+    parser.add_argument("--top-k", type=int, default=5)
+    args = parser.parse_args()
+
+    results = keyword_search(args.query, top_k=args.top_k)
+    print(f"Query: {args.query}")
+    print(f"Results: {len(results)}")
+    for i, item in enumerate(results, 1):
+        text = item["text"].replace("\n", " ")
+        preview = text[:240] + ("..." if len(text) > 240 else "")
+        print(f"\n[{i}] chunk_id={item['chunk_id']} score={item['score']:.4f} source={item['source']}")
+        if item.get("title"):
+            print(f"title={item['title']}")
+        print(preview)

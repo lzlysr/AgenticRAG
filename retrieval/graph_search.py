@@ -199,6 +199,6 @@ def graph_search(query: str, top_k: int = GRAPH_RERANK_TOP_K, device: str = None
             "text": doc["text"],
             "title": doc.get("title", ""),
             "score": float(score),
-            "source": "graph",
+            "source": "graph+rerank",
         })
     return results

@@ -35,8 +35,11 @@ def semantic_search(query: str, top_k: int = SEMANTIC_TOP_K, rerank_top_k: int =
     scores, indices = _index.search(q_vec, top_k)
 
     candidates = []
-    candidate_texts = []
+    candidate_texts = [] # 只保存文本，交给 reranker。
+    # 因为 query 只有一个，所以结果第一维长度是 1
+    # indices[0] 才是这个 query 的搜索结果
     for i, idx in enumerate(indices[0]):
+        # 当请求的 top_k 大于索引中的向量数量时，FAISS 可能用 -1 表示没有结果。
         if idx == -1:
             continue
         cid = _chunk_ids[idx]
