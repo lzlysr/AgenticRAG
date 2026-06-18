@@ -27,6 +27,14 @@
   2. multihop_necessity: 是否真正需要所有 hop 才能回答
   3. question_clarity: 问题是否清晰无歧义
 """
+
+# 这个脚本实际上有两种运行模式：
+# 评分模式：
+# 调用 LLM，给每条 QA 添加 judge 字段
+
+# 过滤模式：
+# 不调用 LLM，根据已有 judge.total 过滤低分数据
+
 import argparse
 import json
 import logging
@@ -160,11 +168,30 @@ def get_judge_prompt(lang=None):
 
 def build_hop_chain(qa: dict, corpus_lookup: dict) -> str:
     """构建 hop chain 文本，包含 chunk 内容摘要"""
+    # 例如输入：
+    # {
+    #     "hops": [
+    #         {
+    #             "hop_idx": 1,
+    #             "question": "Who founded A?",
+    #             "answer": "John",
+    #             "doc_chunk_id": "c001",
+    #             "title": "Company A"
+    #         }
+    #     ]
+    # }
+    # 期望构造成：
+    # **Hop 1** (chunk: c001, doc: Company A)
+    #   Sub-question: Who founded A?
+    #   Sub-answer: John
+    #   Evidence: Company A was founded by John...
+
     lines = []
     for hop in qa["hops"]:
-        chunk_id = hop.get("chunk_id", "?")
+        chunk_id = hop.get("doc_chunk_id") or hop.get("chunk_id", "?")
         chunk = corpus_lookup.get(chunk_id, {})
         # 截取 chunk 前 500 字符作为 evidence
+        # 但这有一个明显风险：答案证据可能不在 chunk 前 500 个字符中。
         text_preview = chunk.get("text", "")[:500].replace("\n", " ")
         title = hop.get("title", chunk.get("title", "?"))
 
@@ -181,11 +208,11 @@ def build_hop_chain(qa: dict, corpus_lookup: dict) -> str:
 # ============================================================
 
 def judge_one(qa: dict, corpus_lookup: dict, model: str = "gpt-oss-120b", lang: str = None) -> dict:
-    """对单条 QA 做 judge 评分"""
+    """调用 LLM 对单条 QA 做 judge 评分"""
     hop_chain = build_hop_chain(qa, corpus_lookup)
     prompt = get_judge_prompt(lang).format(
-        question=qa["question"],
-        answer=qa["answer"],
+        question = qa.get("final_question",qa.get("question", "")),
+        answer = qa.get("final_answer",qa.get("answer", "")),
         hop_chain=hop_chain,
     )
 
@@ -197,6 +224,7 @@ def judge_one(qa: dict, corpus_lookup: dict, model: str = "gpt-oss-120b", lang: 
                 # 确保分数是整数
                 for key in ["answer_correctness", "multihop_necessity", "question_clarity"]:
                     parsed[key] = int(parsed.get(key, 1))
+                # 不相信模型提供的 total，自己计算总分
                 parsed["total"] = parsed["answer_correctness"] + parsed["multihop_necessity"] + parsed["question_clarity"]
                 return parsed
             logger.warning(f"Judge parse failed (attempt {attempt+1}): {resp[:200]}")
@@ -214,7 +242,7 @@ def judge_one(qa: dict, corpus_lookup: dict, model: str = "gpt-oss-120b", lang: 
 # ============================================================
 
 def filter_by_score(input_path: str, output_path: str, min_score: int = 9):
-    """按已有 judge 分数过滤"""
+    """不调用 LLM， 按已有 judge 分数过滤"""
     results = []
     with open(input_path, "r", encoding="utf-8") as f:
         for line in f:
@@ -227,6 +255,8 @@ def filter_by_score(input_path: str, output_path: str, min_score: int = 9):
         print(f"错误: 输入文件中没有 judge 评分，请先运行评分模式")
         return
 
+    # 仅按总分过滤的风险：
+    # 假设某个维度的分数很低，但其他维度很高，总分仍然可能超过 min_score。
     keep = [r for r in results if r.get("judge", {}).get("total", 0) >= min_score]
     removed = total - len(keep)
 
@@ -261,6 +291,10 @@ def filter_by_score(input_path: str, output_path: str, min_score: int = 9):
 
 def main():
     parser = argparse.ArgumentParser(description="LLM Judge 清洗合成 QA")
+    # 评分模式下输入：
+    # multihop_clean.jsonl
+    # 过滤模式下输入：
+    # multihop_judged.jsonl
     parser.add_argument("--input", required=True)
     parser.add_argument("--corpus", default="data/financial_all/corpus_all.json")
     parser.add_argument("--output", required=True)
@@ -307,11 +341,13 @@ def main():
     skipped = [0]
 
     def _judge_item(idx, qa):
+        # 只要存在 judge key，就跳过。
         if args.resume and "judge" in qa:
             skipped[0] += 1
             return qa
 
         scores = judge_one(qa, corpus_lookup, model=args.model, lang=args.lang)
+        # 这里的 qa 是 results 中原字典对象，所以 results 本身也同步被修改。
         qa["judge"] = scores
 
         with write_lock:
@@ -325,10 +361,12 @@ def main():
     t0 = time.time()
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
         futures = {executor.submit(_judge_item, i, r): i for i, r in enumerate(results)}
+        # 创建一个和输入同长度的占位列表。
         judged_results = [None] * len(results)
         for fut in as_completed(futures):
             idx = futures[fut]
             try:
+                # 使最终输出顺序与输入顺序一致
                 judged_results[idx] = fut.result()
             except Exception as e:
                 logger.error(f"Item {idx} failed: {e}")
