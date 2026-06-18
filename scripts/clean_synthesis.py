@@ -65,8 +65,9 @@ TRIVIAL_KEYWORDS = TRIVIAL_KEYWORDS_EN + TRIVIAL_KEYWORDS_ZH
 def _is_numeric_answer(answer: str) -> bool:
     """答案是否为纯数字（允许逗号、小数点、货币符号）"""
     cleaned = answer.lower().strip()
-    for rm in [",", ".", " ", "元", "yuan", "rmb", "hk$", "hkd", "$", "¥",
+    for rm in [",", ".", " ", "元", "yuan", "rmb", "hk$", "hkd", "$", "¥", "%", 
                "万", "亿", "千", "百", "million", "billion", "thousand"]:
+        # 更稳妥的方法是使用正则表达式，而不是不断 replace()。
         cleaned = cleaned.replace(rm, "")
     return cleaned.lstrip("-").isdigit() and len(cleaned) > 0
 
@@ -78,6 +79,7 @@ def is_trivial_hop(hop: dict) -> bool:
 
     # 前缀匹配 + 数字答案
     for pfx in TRIVIAL_PREFIXES:
+        # len(a.strip()) < 5 可能误判合法短答案?
         if q.startswith(pfx) and (_is_numeric_answer(a) or len(a.strip()) < 5):
             return True
 
@@ -95,6 +97,8 @@ def is_trivial_hop(hop: dict) -> bool:
 
 def filter_trivial_last_hop(results: list) -> tuple[list, list]:
     """过滤 3hop+ 最后一跳 trivial 的 QA"""
+    # 为什么只检查 3-hop+，因为
+    # 2-hop 问题中，最后一跳简单并不一定说明整个问题没有价值。
     keep, removed = [], []
     for r in results:
         if r["hop_count"] >= 3 and is_trivial_hop(r["hops"][-1]):
@@ -120,7 +124,8 @@ def dedup_by_question(results: list, prefix_len: int = 80) -> tuple[list, list]:
     keep, removed = [], []
     seen = set()
     for r in results:
-        key = r["question"][:prefix_len].lower().strip()
+        question = r.get("final_question", r.get("question", ""))
+        key = question[:prefix_len].lower().strip()
         if key in seen:
             removed.append(r)
         else:
@@ -130,11 +135,11 @@ def dedup_by_question(results: list, prefix_len: int = 80) -> tuple[list, list]:
 
 
 def dedup_by_chunk_overlap(results: list, threshold: float = 0.8) -> tuple[list, list]:
-    """按 chunk_id 集合重叠去重"""
+    """按 doc_chunk_id 集合重叠去重"""
     keep, removed = [], []
     seen_sets = []
     for r in results:
-        chunks = {h["chunk_id"] for h in r["hops"] if h.get("chunk_id")}
+        chunks = {h["doc_chunk_id"] for h in r["hops"] if h.get("doc_chunk_id")}
         is_dup = False
         for prev in seen_sets:
             if not chunks or not prev:
@@ -164,6 +169,7 @@ def print_stats(results: list, label: str = ""):
     types = Counter(f'{r["hop_count"]}hop_{r["qa_type"]}' for r in results)
     inf = sum(c for t, c in types.items() if "inference" in t)
     comp = sum(c for t, c in types.items() if "comparison" in t)
+    # 答案别名数量
     alias_counts = [len(r.get("answer_aliases", [])) for r in results]
 
     hop3plus = [r for r in results if r["hop_count"] >= 3]
