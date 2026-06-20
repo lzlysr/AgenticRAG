@@ -1,6 +1,21 @@
 #!/usr/bin/env python3
 """训练/测试集划分：分层采样保证训测分布一致
 
+domain_multihop_synthesis.py
+  -> multihop_merged.jsonl / multihop_results.jsonl  原始合成结果
+
+clean_synthesis.py
+  -> multihop_clean.jsonl  规则清洗后
+
+judge_synthesis.py 评分模式
+  -> multihop_judged.jsonl  加 judge 字段
+
+judge_synthesis.py --filter-only
+  -> multihop_final.jsonl  按 judge 分数过滤后
+
+split_train_test.py
+  -> train/test
+
 用法:
   # 默认 80/20 划分
   python scripts/split_train_test.py \
@@ -16,7 +31,7 @@
 
 划分策略:
   1. 按 (hop_count, qa_type) 分层采样，保证各类别训测比例一致
-  2. 同一 seed chunk 的 QA 不能同时出现在训练和测试集（防止数据泄露）
+  2. 同一 seed chunk 产生的所有 QA 不能同时出现在训练和测试集（防止数据泄露）
   3. 输出统计对比训测分布
 """
 import argparse
@@ -30,7 +45,7 @@ def group_by_seed_chunk(items: list) -> dict[str, list]:
     groups = defaultdict(list)
     for r in items:
         # 用第一跳的 chunk_id 作为 seed 标识
-        seed_key = r["hops"][0]["chunk_id"] if r["hops"] else r["id"]
+        seed_key = r["hops"][0]["doc_chunk_id"] if r["hops"] else r["id"]
         groups[seed_key].append(r)
     return groups
 
@@ -51,15 +66,24 @@ def stratified_split(items: list, test_ratio: float = 0.2,
     print(f"Seed chunk 分组: {len(groups)} 组, 平均 {len(items)/len(groups):.1f} 条/组")
 
     # 每组标记主 stratum（组内可能有多种 hop/type，取众数）
+    # 这里的 stratum 是一个字符串，如 "2hop_inference"，表示该组的主要类型
+    # 要做到更精确，需要使用组级优化算法，而不是简单给每组一个主标签。
     group_strata = {}
     for gkey, gitems in groups.items():
         strata = Counter(f"{r['hop_count']}hop_{r['qa_type']}" for r in gitems)
+        # most_common(1) 会返回计数相同情况下首先遇到的类别。group_strata的值是一个字符串，如 "2hop_inference"，表示该组的主要类型。
         group_strata[gkey] = strata.most_common(1)[0][0]
 
     # 按 stratum 分桶
     stratum_groups = defaultdict(list)  # stratum → [group_key, ...]
     for gkey, stratum in group_strata.items():
         stratum_groups[stratum].append(gkey)
+    # 得到类似：
+    # {
+    #     "2hop_inference": ["bbg_0016", "yh_0003", ...],
+    #     "3hop_inference": ["hq_0098", "jjy_0021", ...],
+    #     "2hop_comparison": ["zb_0042", ...],
+    # }
 
     # 计算目标测试集大小
     if test_size > 0:
@@ -72,14 +96,16 @@ def stratified_split(items: list, test_ratio: float = 0.2,
     train_groups = set()
 
     for stratum, gkeys in sorted(stratum_groups.items()):
+        # 随机打乱组
         random.shuffle(gkeys)
-        # 该 stratum 的总条目数
+        # 该 stratum 的总条目数（当前这个 stratum 类别里，一共有多少条 QA 样本。）
         stratum_total = sum(len(groups[gk]) for gk in gkeys)
         # 按全局比例分配该 stratum 的测试条目数
         stratum_test_target = int(stratum_total * target_test / len(items))
         stratum_test_target = max(stratum_test_target, 1)  # 每类至少 1 条
 
         test_count = 0
+        # 为了保持 group 完整性不可避免的偏差。如果 stratum_test_target 是 10 条，但前面抽了 9 条后剩下的组都很大（每组 5 条），就可能抽到 15 条，超过目标。但这是为了保证同一 seed chunk 不被拆分。
         for gk in gkeys:
             if test_count >= stratum_test_target:
                 break
@@ -90,6 +116,7 @@ def stratified_split(items: list, test_ratio: float = 0.2,
     train_groups = set(groups.keys()) - test_groups
 
     # 构建最终列表
+    # 确保：一个 seed group 中的所有 QA 都在同一个集合中（训练或测试），不会拆分。
     train_items = []
     test_items = []
     for gk in groups:
@@ -121,6 +148,11 @@ def print_distribution(items: list, label: str):
         print(f"    {h}hop: {c} ({c/n*100:.1f}%)")
 
     # 类型分布
+    # Counter({
+    #   2: 100,
+    #   3: 300,
+    #   4: 100
+    # })
     type_dist = Counter(f'{r["hop_count"]}hop_{r["qa_type"]}' for r in items)
     print(f"  细分类型:")
     for t, c in sorted(type_dist.items()):
@@ -138,14 +170,14 @@ def print_distribution(items: list, label: str):
         print(f"  judge: avg={sum(totals)/len(totals):.1f}, min={min(totals)}, max={max(totals)}")
 
     # seed chunk 数
-    seeds = set(r["hops"][0]["chunk_id"] for r in items if r["hops"])
+    seeds = set(r["hops"][0]["doc_chunk_id"] for r in items if r["hops"])
     print(f"  独立 seed chunks: {len(seeds)}")
 
 
 def check_leakage(train_items: list, test_items: list):
     """检查训测集之间是否有 seed chunk 泄露"""
-    train_seeds = set(r["hops"][0]["chunk_id"] for r in train_items if r["hops"])
-    test_seeds = set(r["hops"][0]["chunk_id"] for r in test_items if r["hops"])
+    train_seeds = set(r["hops"][0]["doc_chunk_id"] for r in train_items if r["hops"])
+    test_seeds = set(r["hops"][0]["doc_chunk_id"] for r in test_items if r["hops"])
     overlap = train_seeds & test_seeds
     if overlap:
         print(f"\n  ⚠ 泄露检查: {len(overlap)} 个 seed chunk 同时出现在训练和测试集!")
