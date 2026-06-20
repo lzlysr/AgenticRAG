@@ -70,6 +70,8 @@ def plan(state: AgentState) -> AgentState:
     prompt = profile["planner"].format(query=query, feedback_section=feedback_section, tools_section=tools_section)
     result = agent_chat_json(prompt)
 
+    # result 的每一个子任务里的 depends_on 是 step_id 列表，而不是 sub_query 列表。因为依赖关系是基于步骤编号，而不是具体的查询内容。好像无法保证子问题真正的依赖关系？依靠模型本身的能力和 vertifier 兜底
+
     if not result or not isinstance(result, list):
         result = [{"id": 1, "sub_query": query, "tool": "semantic_search", "depends_on": []}]
 
