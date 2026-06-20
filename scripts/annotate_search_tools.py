@@ -10,6 +10,37 @@
     --output data/financial_eval/train_qa_pairs_annotated.json \
     --index-dir data/financial_all/indexes/ \
     --workers 10
+
+为每一跳补充：search_tools（单独召回）、search_tools_hybrid（混合召回）、search_query
+例如原始 hop：
+{
+  "hop_idx": 2,
+  "question": "Where was John Smith born?",
+  "answer": "London",
+  "doc_chunk_id": "john_003"
+}
+标注后可能变成：
+{
+  "hop_idx": 2,
+  "question": "Where was John Smith born?",
+  "answer": "London",
+  "doc_chunk_id": "john_003",
+  "search_query": "Where was John Smith born?",
+  "search_tools": [
+    "keyword_search",
+    "semantic_search"
+  ],
+  "search_tools_hybrid": [
+    ["keyword_search", "semantic_search"],
+    ["keyword_search", "semantic_search", "graph_search"]
+  ]
+}
+
+策略：
+对于当前 QA 的当前一跳，只要任何一种方式命中 -> 该跳可达。
+如果所有非首跳hop都可达 -> 该 QA 被覆盖。
+只要任何一跳没被任何工具命中，则认为该 QA 不被覆盖。
+
 """
 import argparse
 import json
@@ -22,7 +53,7 @@ from threading import Lock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 _write_lock = Lock()
-_stats = {"total_hops": 0, "keyword": 0, "semantic": 0, "graph": 0, "hybrid": 0}
+_stats = {"total_hops": 0, "keyword_search": 0, "semantic_search": 0, "graph_search": 0, "hybrid_hit": 0}
 
 
 def search_keyword(query: str, top_k: int = 10) -> list[dict]:
@@ -64,21 +95,23 @@ def annotate_one(qa: dict, top_k: int = 10) -> dict:
     from retrieval.hybrid_search import hybrid_fuse_and_rerank
 
     qa = dict(qa)
-    new_hops = []
+    new_hops = [] # 每个原始 hop 处理完后放入这个列表，最终：qa["hops"] = new_hops
 
     for hop in qa["hops"]:
         hop = dict(hop)
+        # 使用原子问题，评测的是：用原子子问题能否召回当前 chunk。
         question = hop["question"]
         target_chunk = hop.get("doc_chunk_id", "")
         hop_idx = hop["hop_idx"]
 
+        # 第一跳通常是 seed QA，不是由多跳检索过程找到的。因此不强求第一跳也被检索工具命中，直接跳过标注。
         if not target_chunk or hop_idx == 1:
             hop["search_tools"] = []
             hop["search_query"] = question
             new_hops.append(hop)
             continue
 
-        # 1) 调用 3 个单工具，缓存原始结果
+        # 1) 调用 3 个单工具，缓存原始结果，后面的 hybrid 不会重新执行这些基础检索。
         raw_results = {}
         for name, fn in SINGLE_TOOLS.items():
             try:
@@ -93,6 +126,9 @@ def annotate_one(qa: dict, top_k: int = 10) -> dict:
                 hit_tools.append(name)
 
         # 3) 检查 4 种 hybrid 组合命中
+        # 1. 有一个重要的 Hybrid 标签问题：若两个工具组合中只有一个工具命中，另一个工具没有命中，那么仍然算作该组合命中。因为混合检索的目的是希望至少有一个工具能召回目标 chunk。
+        # 2. Hybrid 可能比单工具命中更差。
+        # 3. Hybrid 的候选池只来自各工具 top-10。
         hit_hybrids = []
         for combo in HYBRID_COMBOS:
             results_list = [raw_results[t] for t in combo if raw_results.get(t)]
@@ -106,6 +142,7 @@ def annotate_one(qa: dict, top_k: int = 10) -> dict:
         hop["search_tools_hybrid"] = hit_hybrids
         hop["search_query"] = question
 
+        # 更新全局统计
         with _write_lock:
             _stats["total_hops"] += 1
             for t in hit_tools:
@@ -210,6 +247,16 @@ def main():
     print(f"  hybrid 组合命中: {_stats.get('hybrid_hit', 0)}/{total_hops} ({_stats.get('hybrid_hit', 0)/max(total_hops,1)*100:.1f}%)")
 
     # 统计每个 hop 的覆盖情况（单工具 or hybrid 至少命中一个）
+    # 一个逻辑上的冗余现象：
+    # 如果 hybrid 的输入只来自单工具 top-k 结果，那么理论上：
+    # 若所有单工具 top-k 都没有目标 chunk，hybrid 不可能凭空召回目标 chunk。
+    # 因为目标根本没有进入候选池。
+    # Hybrid 不能提升“召回覆盖”，只能改变目标在融合结果中的保留与排序情况。
+    # 甚至 hybrid 可能比单工具覆盖更低，因为目标可能被重排挤出去。
+    # 若要让 hybrid 真正补充 top-k 覆盖，需要：
+    # 各工具先召回更大的候选池
+    # 然后 hybrid 截断到较小 top-k
+    
     from collections import Counter
     coverage = Counter()
     for qa in annotated:
