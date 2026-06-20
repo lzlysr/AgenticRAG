@@ -10,6 +10,14 @@
                         └── insufficient ────    ↓              ↓
                                             [synthesizer] ──→ END
 """
+# 这里有两个循环：
+
+# 执行循环：
+# executor → executor：计划还有多个步骤，需要继续执行；
+
+# PEV 循环：
+# planner → executor → verifier → planner：原计划执行完了，但证据不足，需要重新规划。
+
 import sys, os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -32,9 +40,15 @@ def build_graph(enable_verifier: bool = True, enabled_tools: list[str] | None = 
         enabled_tools: 允许使用的工具列表（消融实验用）
     """
     # 配置 executor 工具集（每次先恢复完整工具再过滤）
+    # TOOL_REGISTRY
+#     executor 当前允许使用的工具
+    # _ALL_TOOLS
+    #     全部可用工具的备份/完整注册表
+    # _ensure_tools()
+    #     确保工具完成初始化和注册
     from agents.executor import TOOL_REGISTRY, _ensure_tools, _ALL_TOOLS
     _ensure_tools()
-    TOOL_REGISTRY.clear()
+    TOOL_REGISTRY.clear() # 清空当前工具集
     if enabled_tools is not None:
         for name in enabled_tools:
             if name in _ALL_TOOLS:
@@ -111,6 +125,7 @@ def build_graph(enable_verifier: bool = True, enabled_tools: list[str] | None = 
 
 def run_query(query: str, **kwargs) -> dict:
     """运行单个查询，返回完整 state"""
+    # 每次 run_query() 都重新编译图
     app = build_graph(**kwargs)
     initial_state = {
         "query": query,
