@@ -1,4 +1,6 @@
 """查询复杂度分类器：simple / multi_hop"""
+# 负责调用 llm 判断一个非常关键的问题：
+# 当前用户问题是简单问题，还是需要多跳规划的问题？实际上项目只用到了multi_hop。
 import sys, os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
