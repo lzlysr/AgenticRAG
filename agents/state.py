@@ -8,7 +8,7 @@ import operator
 class AgentState(TypedDict):
     query: str                                                      # 原始查询
     query_type: Literal["simple", "multi_hop"]                      # 路由结果
-    plan: list[dict]                              # 子任务 [{"id", "sub_query","depends_on", "status"}]
+    plan: list[dict]                              # 子任务 [{"id", "iteration", "sub_query","depends_on", "status"}]
     current_step: int                                               # 当前子任务索引
     evidence: Annotated[list[dict], operator.add]                   # 累积证据
     tool_calls: Annotated[list[dict], operator.add]                 # 工具调用日志
@@ -34,3 +34,7 @@ class AgentState(TypedDict):
 # | iteration_count       | Planner(+1)    | Verifier(预算检查)           |
 # | total_tool_calls      | Executor(+N)   | Executor, Verifier(预算检查) |
 # | final_answer          | Synthesizer    | 输出                        |
+#
+# 重规划时旧 evidence 会保留并继续追加；plan 会被新计划覆盖。
+# 因此 plan step 和 evidence entry 都带 iteration，用 (iteration, step_id)
+# 区分不同规划轮次中的同名步骤。

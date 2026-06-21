@@ -49,7 +49,8 @@ def plan(state: AgentState) -> AgentState:
         # 重规划后 Step ID 与旧 evidence 冲突：
         # 旧 evidence 不清空，新计划又从 1 开始，依赖可能被旧轮次错误满足？
         evidence_summary = "\n".join(
-            f"- Step {e['step_id']} [{e.get('tool', '?')}]: \"{e['sub_query']}\" -> {len(e.get('results', []))} results"
+            f"- Iteration {e.get('iteration', '?')} Step {e['step_id']} "
+            f"[{e.get('tool', '?')}]: \"{e['sub_query']}\" -> {len(e.get('results', []))} results"
             for e in state.get("evidence", [])
         )
         feedback_section = profile["replan_feedback"].format(
@@ -75,9 +76,10 @@ def plan(state: AgentState) -> AgentState:
     if not result or not isinstance(result, list):
         result = [{"id": 1, "sub_query": query, "tool": "semantic_search", "depends_on": []}]
 
-    # 标记所有步骤为 pending （即将发生的）
+    # 标记所有步骤为 pending （即将发生的），并记录本轮规划编号。
     for step in result:
         step["status"] = "pending"
+        step["iteration"] = iteration + 1
 
     return {
         "plan": result,

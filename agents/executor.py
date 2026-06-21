@@ -58,10 +58,15 @@ def execute_step(state: AgentState) -> AgentState:
     max_calls = get_profile()["max_retrieval_calls"]
     while current < len(plan) and total_calls < max_calls:
         step = plan[current]
+        step_iteration = step.get("iteration") or state.get("iteration_count", 0)
 
         # 检查依赖是否满足
         deps = step.get("depends_on", [])
-        completed_ids = {e["step_id"] for e in state.get("evidence", []) + new_evidence}
+        completed_ids = {
+            e["step_id"]
+            for e in state.get("evidence", []) + new_evidence
+            if e.get("iteration") == step_iteration and "step_id" in e
+        }
         if deps and not all(d in completed_ids for d in deps):
             break
 
@@ -112,6 +117,7 @@ def execute_step(state: AgentState) -> AgentState:
         step["status"] = "done"
 
         evidence_entry = {
+            "iteration": step_iteration,
             "step_id": step["id"],
             "sub_query": step["sub_query"], # 保存原问题
             "tool": tool_label,
@@ -119,6 +125,7 @@ def execute_step(state: AgentState) -> AgentState:
         }
         new_evidence.append(evidence_entry)
         new_tool_calls.append({
+            "iteration": step_iteration,
             "step_id": step["id"],
             "tool": tool_label,
             "query": sub_query, # 保存增强后的查询？而不是 evidence_entry 中的原问题？因为增强后的查询才是实际调用工具的输入，更能反映工具调用的上下文。
@@ -126,6 +133,7 @@ def execute_step(state: AgentState) -> AgentState:
         })
         new_trace.append({
             "node": "executor",
+            "iteration": step_iteration,
             "step_id": step["id"],
             "tool": tool_label,
             "num_results": len(results),
