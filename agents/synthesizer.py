@@ -2,6 +2,8 @@
 import sys, os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# 前面几个节点使用：agent_chat_json(...)，因为它们需要结构化输出。
+# 而 Synthesizer 只需要文本答案，所以使用：agent_chat(...)
 from llm.client import agent_chat
 from agents.state import AgentState
 from agents.prompts import get_profile
@@ -9,6 +11,7 @@ from agents.prompts import get_profile
 
 def _extract_short_answer(text: str) -> str:
     """从 LLM 输出中提取简短答案（去掉解释性内容）"""
+    # 所以这个函数更适合当前数据集中“单个短答案”的任务设置。如果是需要生成更长的解释性答案，或者需要保留多个要点的情况，这个函数可能需要调整或去掉。
     import re
     text = text.strip()
     if not text:
