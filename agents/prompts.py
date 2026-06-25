@@ -332,13 +332,13 @@ PROMPT_PROFILES = {
 
 # ── 模型 → Profile 映射 ─────────────────────────────────────────────────────
 
-_SMALL_PATTERN = re.compile(r"(?:^|[^0-9])(?:7|8|14)[Bb]", re.IGNORECASE)
+_SMALL_PATTERN = re.compile(r"(?:^|[^0-9])(?:4|7|8|14)[Bb]", re.IGNORECASE)
 
 
 def get_profile(model_name: str | None = None) -> dict:
     """根据模型名称和语言返回对应的 prompt profile。
 
-    规则：模型名包含 7B/8B/14B → small，其余 → large。
+    规则：模型名包含 4B/7B/8B/14B → small，其余 → large。
     语言：config.PROMPT_LANG = "zh" 时使用中文 prompt。
     """
     if model_name is None:

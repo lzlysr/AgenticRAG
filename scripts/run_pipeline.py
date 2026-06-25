@@ -30,6 +30,6 @@ def run_single(query: str, verbose: bool = True) -> dict:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("query", nargs="?", default="Which hospital has more beds, the Memorial Hospital of Rhode Island or the Primary Health Centre in Mundalika?")
+    parser.add_argument("query", nargs="?", default="Who trained the wrestler who lost the MCW Rage TV title to the first champion of the MCW Heavyweight Championship?")
     args = parser.parse_args()
     run_single(args.query)
