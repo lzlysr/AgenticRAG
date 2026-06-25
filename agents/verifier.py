@@ -10,7 +10,7 @@
 import sys, os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from llm.client import agent_chat_json
+from llm.client import judge_chat_json
 from agents.state import AgentState
 from agents.prompts import get_profile
 
@@ -48,15 +48,19 @@ def verify(state: AgentState) -> AgentState:
             evidence_text += f"[{r.get('chunk_id', '?')}] {r.get('text', '')[:1000]}\n"
 
     # 构造 Verifier Prompt
+    # 如果需要同步改为用 Judge 模型的 profile，对应 large prompt
+    # profile = get_profile(os.environ.get("JUDGE_LLM_MODEL")) 
     profile = get_profile()
     prompt = profile["verifier"].format(query=query, evidence_text=evidence_text or "No evidence collected.")
-    result = agent_chat_json(prompt)
+    result = judge_chat_json(prompt)
 
     verdict = "sufficient"
     feedback = ""
     if result:
         verdict = result.get("verdict", "sufficient")
         feedback = result.get("feedback", "")
+        if feedback:
+            verdict = "insufficient"  # 有反馈就认为不充分
 
     # Evidence 去重检测：如果是 replan 后的第 2+ 轮，检查新 evidence 是否和旧 evidence 高度重复
     # 但是根据 Planner 的计数逻辑，这个条件实际上第一轮验证就满足。不过第一轮通常没有“旧 evidence”，所以后续：if curr_chunks and prev_chunks:不会触发强制 sufficient。

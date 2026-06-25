@@ -30,6 +30,6 @@ def run_single(query: str, verbose: bool = True) -> dict:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("query", nargs="?", default="Who trained the wrestler who lost the MCW Rage TV title to the first champion of the MCW Heavyweight Championship?")
+    parser.add_argument("query", nargs="?", default="In which U.S. state is the county where the city of the successor of the Latvian representative at the 2006 Contest located?")
     args = parser.parse_args()
     run_single(args.query)
