@@ -50,7 +50,7 @@ class ModelConfig:
     model_name: str                    # 实际传给 API 的模型名
     api_key: str = "EMPTY"             # API Key（本地 vLLM 用 "EMPTY"）
     max_len: int = 32768
-    temperature: float = 0.7
+    temperature: float = 0.1
     top_p: float = 0.8
     top_k: int = 20
     min_p: int = 0

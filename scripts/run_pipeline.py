@@ -22,7 +22,7 @@ def run_single(query: str, verbose: bool = True) -> dict:
         print(f"LLM Stats: {stats.snapshot()}")
         print(f"\nExecution Trace:")
         for t in state.get("trace", []):
-            print(f"  [{t.get('node', '?')}] {json.dumps({k: v for k, v in t.items() if k != 'node' and k != 'plan'}, ensure_ascii=False)}")
+            print(f"  [{t.get('node', '?')}] {json.dumps({k: v for k, v in t.items() if k != 'node'}, ensure_ascii=False)}")
 
     return state
 
@@ -30,6 +30,6 @@ def run_single(query: str, verbose: bool = True) -> dict:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("query", nargs="?", default="Were Scott Derrickson and Ed Wood of the same nationality?")
+    parser.add_argument("query", nargs="?", default="Which is heavier, the Army's early 155-mm artillery or a stone in the measurement system mentioned?")
     args = parser.parse_args()
     run_single(args.query)

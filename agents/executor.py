@@ -137,6 +137,7 @@ def execute_step(state: AgentState) -> AgentState:
             "step_id": step["id"],
             "tool": tool_label,
             "num_results": len(results),
+            "id_results": [r.get("chunk_id") for r in results if isinstance(r, dict) and r.get("chunk_id")],
         })
 
         current += 1
