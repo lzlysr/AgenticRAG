@@ -45,7 +45,7 @@ def verify(state: AgentState) -> AgentState:
             f"Step {e['step_id']}: {e['sub_query']} (tool: {e['tool']}) ---\n"
         )
         for r in e.get("results", [])[:3]:
-            evidence_text += f"[{r.get('chunk_id', '?')}] {r.get('text', '')[:500]}\n"
+            evidence_text += f"[{r.get('chunk_id', '?')}] {r.get('text', '')[:1000]}\n"
 
     # 构造 Verifier Prompt
     profile = get_profile()

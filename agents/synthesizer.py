@@ -47,7 +47,7 @@ def synthesize(state: AgentState) -> AgentState:
     evidence_text = ""
     for e in evidence:
         for r in e.get("results", [])[:3]:
-            evidence_text += f"[{r.get('chunk_id', '?')}] {r.get('text', '')[:500]}\n\n"
+            evidence_text += f"[{r.get('chunk_id', '?')}] {r.get('text', '')[:1000]}\n\n"
 
     profile = get_profile()
     prompt = profile["synthesizer"].format(query=query, evidence_text=evidence_text or "No evidence available.")
@@ -68,7 +68,7 @@ def simple_rag(state: AgentState) -> AgentState:
     results = semantic_search(query)
 
     profile = get_profile()
-    context = "\n\n".join(r["text"][:500] for r in results[:3])
+    context = "\n\n".join(r["text"][:1000] for r in results[:3])
     prompt = profile["simple_rag"].format(context=context, query=query)
     answer = agent_chat(prompt)
     answer = _extract_short_answer(answer)
@@ -84,5 +84,7 @@ def simple_rag(state: AgentState) -> AgentState:
         "final_answer": answer.strip(),
         "evidence": evidence,
         "total_tool_calls": 1,
-        "trace": [{"node": "simple_rag", "num_results": len(results)}],
+        "trace": [{"node": "simple_rag", 
+                   "num_results": len(results),
+                    "id_results": [r.get("chunk_id") for r in results if isinstance(r, dict) and r.get("chunk_id")]}]
     }

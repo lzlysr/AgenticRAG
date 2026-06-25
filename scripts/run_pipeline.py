@@ -30,6 +30,6 @@ def run_single(query: str, verbose: bool = True) -> dict:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("query", nargs="?", default="Which is heavier, the Army's early 155-mm artillery or a stone in the measurement system mentioned?")
+    parser.add_argument("query", nargs="?", default="Which hospital has more beds, the Memorial Hospital of Rhode Island or the Primary Health Centre in Mundalika?")
     args = parser.parse_args()
     run_single(args.query)
