@@ -1,4 +1,7 @@
-"""评测主入口"""
+"""
+评测主入口
+QA数据 → LangGraph Agent → 推理 → EM/F1 → diagnostics → 可选LLM judge → checkpoint → 汇总
+"""
 import json
 import os
 import sys

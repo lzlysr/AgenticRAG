@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Agentic 评测：模型自主 tool_call → 环境执行检索 → 模型继续 → <answer>
 
-与 GRPO rollout 完全一致的评测方式，使用 Qwen3 原生 tool calling 格式。
+与 GRPO rollout 完全一致的评测方式，使用 Qwen3 原生 tool calling 格式。评价tool调用能力
 
 用法：
   # 需要先启动 vLLM

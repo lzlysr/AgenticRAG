@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""云端模型评测脚本：扁平并行跑所有 sample，共享一个 graph
+"""云端模型评测脚本：扁平并行跑所有 sample，共享一个 graph。评价agent系统整体效果
 
 特性：
 - 单 graph 实例，检索模型只加载一次
