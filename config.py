@@ -3,7 +3,8 @@ import os
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# override=True 这样即使 shell 里残留了 7897，项目启动时也会用 .env 里的 17890 覆盖它。
+load_dotenv(override=True)
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
