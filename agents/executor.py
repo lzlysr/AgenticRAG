@@ -36,7 +36,7 @@ def _normalize_tool(tool_field) -> tuple[list[str], bool]:
     if isinstance(tool_field, str):
         if tool_field == "hybrid_search":
             # 没有直接给出工具列表。
-            # SFT 模型生成的 hybrid_search 标记，需要从 step 参数中取 tools 列表
+            # 兼容 SFT 模型生成的 hybrid_search 标记，需要从 step 参数中取 tools 列表
             return [], True
         return [tool_field], False
     return ["semantic_search"], False
@@ -67,6 +67,7 @@ def execute_step(state: AgentState) -> AgentState:
             for e in state.get("evidence", []) + new_evidence
             if e.get("iteration") == step_iteration and "step_id" in e
         }
+        # 当前 step 依赖的前置步骤是否都已经完成了；如果没完成，就先不执行当前 step。
         if deps and not all(d in completed_ids for d in deps):
             break
 
@@ -74,6 +75,8 @@ def execute_step(state: AgentState) -> AgentState:
         sub_query = step.get("sub_query", state["query"])
 
         # hybrid_search: 从 step 参数中取 tools 列表
+        # SFT 兼容代码，因为 SFT 模型可能只输出 "hybrid_search" 而没有给出具体工具列表。
+        # 当前在线 planner prompt 里并没有要求输出 tools 参数。所以在 run_pipeline.py 的正常 planner 输出里，step["tools"] 基本不会存在。
         if is_hybrid and not tool_names:
             hybrid_tools = step.get("tools", ["keyword_search", "semantic_search"])
             if isinstance(hybrid_tools, str):
@@ -85,9 +88,10 @@ def execute_step(state: AgentState) -> AgentState:
             # 取当前节点调用中上一任务的搜索结果。
             # 问题：对于分支计划，取“最近一步”不一定等于“依赖步骤”。应该根据 depends_on 精确查找证据。
             prev_results = new_evidence[-1].get("results", [])
-            # 取上一任务排名第一结果的正文
+            # 取上一任务排名第一结果的正文 原版要截取前200字符，需要保留完整的吗？
             prev_answer = prev_results[0].get("text", "")[:200] if prev_results else ""
             # 追加到子查询：
+            # ❗重要问题：可能导致当前检索被上一跳大量证据污染，重复召回上一跳内容？
             if prev_answer:
                 sub_query = f"{sub_query} (context: {prev_answer})"
 
