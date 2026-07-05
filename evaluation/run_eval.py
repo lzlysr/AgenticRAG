@@ -15,7 +15,11 @@ from config import ACTIVE_DATA_DIR, RESULTS_DIR
 
 
 def load_qa_pairs(subset: str | None = None, data_dir: str | None = None) -> list:
-    """加载 QA 数据"""
+    """
+    加载 QA 数据
+    
+    subset： 可选的子集名称，用于只加载特定子集的数据。比如 3hop_inference、2hop_comparison。默认 None，评全部。
+    """
     qa_path = os.path.join(data_dir or ACTIVE_DATA_DIR, "qa_pairs.json")
     with open(qa_path, "r", encoding="utf-8") as f:
         qa_pairs = json.load(f)
@@ -38,6 +42,7 @@ def _load_checkpoint(ckpt_path: str) -> dict[int, dict]:
             for line in f:
                 if line.strip():
                     r = json.loads(line)
+                    # idx = QA在数据集中的顺序编号
                     done[r["idx"]] = r
     return done
 
@@ -82,7 +87,7 @@ def run_full_eval(
     if torch.cuda.is_available():
         gpu_device = os.environ.get("RETRIEVAL_DEVICE")
         if not gpu_device:
-            # 自动选显存最少的 GPU
+            # 自动选显存占用最少的 GPU
             mem_used = []
             for i in range(torch.cuda.device_count()):
                 mem_used.append(torch.cuda.mem_get_info(i)[1] - torch.cuda.mem_get_info(i)[0])
@@ -90,12 +95,15 @@ def run_full_eval(
             gpu_device = f"cuda:{gpu_idx}"
         import retrieval.embedder as _emb
         import retrieval.reranker as _rnk
+        # 强制 embedder 和 reranker 加载到指定 GPU 上
         _orig_emb_get = _emb._get_model
         _orig_rnk_get = _rnk._get_model
         def _emb_get_gpu(device=None):
             return _orig_emb_get(device or gpu_device)
         def _rnk_get_gpu(device=None):
             return _orig_rnk_get(device or gpu_device)
+        # 用新包装的函数替换原来的两个_get_model函数：
+        # 这之后，项目里任何地方再调用 retrieval.embedder._get_model() 或 retrieval.reranker._get_model() 都会默认使用上面确定的 gpu_device 。
         _emb._get_model = _emb_get_gpu
         _rnk._get_model = _rnk_get_gpu
         # 预加载模型
@@ -122,6 +130,7 @@ def run_full_eval(
 
     if not todo and done_map:
         print("[eval] All samples already completed, aggregating results...")
+        # done_map 是“并发写入”的，写入顺序可能乱，所以再次按 idx 排序
         results = [done_map[i] for i in sorted(done_map.keys()) if i < len(samples)]
     else:
         # checkpoint 写锁
@@ -188,14 +197,17 @@ def run_full_eval(
                         continue
                     seen_chunks.add(cid)
                     title = r.get("title", "")
-                    text = r.get("text", "")[:500]
+                    # 原来的500够吗？
+                    text = r.get("text", "")[:1000]
                     evidence_parts.append(f"[{cid}] {title}\n{text}")
             record["evidence_text"] = "\n\n".join(evidence_parts)
 
+            # 在线的 llm judge
             if use_llm_judge:
                 from evaluation.llm_judge import judge_answer_correctness, judge_faithfulness
+                # 原来的200够吗？
                 evidence_text = "\n".join(
-                    r.get("text", "")[:200]
+                    r.get("text", "")[:1000]
                     for e in state.get("evidence", [])
                     for r in e.get("results", [])[:2]
                 )
@@ -245,6 +257,7 @@ def run_full_eval(
         # 合并 checkpoint + 新结果
         for r in new_results:
             done_map[r["idx"]] = r
+        # done_map 是“并发写入”的，写入顺序可能乱，所以再次按 idx 排序
         results = [done_map[i] for i in sorted(done_map.keys()) if i < len(samples)]
 
     # 聚合
@@ -294,13 +307,19 @@ def run_full_eval(
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
+    # --subset：只评某个 subset，比如 3hop_inference、2hop_comparison。默认 None，评全部。
     parser.add_argument("--subset", default=None)
-    parser.add_argument("--max-samples", type=int, default=200)
+    # --max-samples：最多评多少条，默认 5。是在加载并按 subset 过滤后取前 N 条。
+    parser.add_argument("--max-samples", type=int, default=5)
+    # --model：覆盖 AGENT_LLM_MODEL。默认 None，用 .env/config.py 里的 AGENT_LLM_MODEL。
     parser.add_argument("--model", default=None, help="Override AGENT_LLM_MODEL")
     parser.add_argument("--workers", type=int, default=1, help="Parallel workers")
-    parser.add_argument("--llm-judge", action="store_true")
-    parser.add_argument("--resume", action="store_true", help="Resume from checkpoint")
+    # --llm-judge：是否额外启用 LLM-as-a-Judge。默认不开。开启后每条样本会额外调用 correctness 和 faithfulness judge。
+    parser.add_argument("--llm-judge", default=False, action="store_true")
+    parser.add_argument("--resume", default=True, action="store_true", help="Resume from checkpoint")
+    # --data-dir：覆盖数据目录，要求里面有 qa_pairs.json。默认用 config.ACTIVE_DATA_DIR。
     parser.add_argument("--data-dir", default=None, help="Override data directory (qa_pairs.json location)")
+    # --index-dir：覆盖索引目录。会改 config.ACTIVE_INDEX_DIR 和 config.INDEX_DIR。
     parser.add_argument("--index-dir", default=None, help="Override index directory")
     parser.add_argument("--lang", default=None, choices=["en", "zh"], help="Prompt language")
     args = parser.parse_args()
