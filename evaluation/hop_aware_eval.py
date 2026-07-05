@@ -1,4 +1,4 @@
-"""AgenticRAGTracer Hop-Aware 诊断评测 ★
+"""AgenticRAGTracer Hop-Aware 诊断评测 ★   不看答案，看“过程是否对齐 multi-hop 结构”
 
 核心诊断指标：
 - hop_recall: gold hop 中被成功检索到的比例
@@ -9,7 +9,11 @@
 
 
 def compute_hop_recall(state: dict, qa_item: dict) -> float:
-    """计算 hop-level 召回率：gold docs 中被检索到的比例"""
+    """
+    计算 hop-level 召回率：gold docs 中被检索到的比例
+
+    即：gold multi-hop QA 的“每一跳证据”，agent有没有找到？
+    """
     gold_chunk_ids = set()
     for hop in qa_item.get("hops", []):
         cid = hop.get("doc_chunk_id", "")

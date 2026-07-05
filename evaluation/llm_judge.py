@@ -1,4 +1,7 @@
-"""LLM-as-a-Judge：faithfulness, context precision, answer correctness"""
+"""
+LLM-as-a-Judge：faithfulness, context precision, answer correctness
+答案是否被证据支持、检索是否找对了文档、最终答案是否正确
+"""
 import sys, os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -17,6 +20,7 @@ def _get_lang(lang=None):
 
 
 def _truncate(text: str, max_chars: int) -> str:
+    """超过长度 → 截断 + 标记"""
     if len(text) <= max_chars:
         return text
     return text[:max_chars] + f"\n... [truncated, {len(text)} chars total]"

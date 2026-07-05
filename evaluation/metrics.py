@@ -1,4 +1,4 @@
-"""基础评测指标：EM、F1、CostTracker"""
+"""基础评测指标：EM（Exact Match）、F1（token overlap）、CostTracker（系统性能统计）"""
 import re
 import string
 import time
@@ -20,12 +20,14 @@ def _normalize(text: str) -> str:
 def exact_match(prediction: str, gold: str, aliases: list[str] | None = None) -> float:
     """EM 精确匹配，支持 answer_aliases"""
     candidates = [gold] + (aliases or [])
+    # 只要匹配任意 alias → EM = 1，否则 EM = 0
     return max(1.0 if _normalize(prediction) == _normalize(c) else 0.0 for c in candidates)
 
 
 def f1_score(prediction: str, gold: str, aliases: list[str] | None = None) -> float:
     """Token-level F1，支持 answer_aliases（取最大值）"""
     candidates = [gold] + (aliases or [])
+    # 取最大F1
     return max(_f1_single(prediction, c) for c in candidates)
 
 
@@ -39,12 +41,14 @@ def _f1_single(prediction: str, gold: str) -> float:
     if not pred_tokens:
         return 0.0
 
+    # 交集计算
     common = Counter(pred_tokens) & Counter(gold_tokens)
     num_common = sum(common.values())
 
     if num_common == 0:
         return 0.0
 
+    # 衡量“答案重合程度”，不是完全匹配
     precision = num_common / len(pred_tokens)
     recall = num_common / len(gold_tokens)
     return 2 * precision * recall / (precision + recall)
