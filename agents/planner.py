@@ -59,6 +59,8 @@ def plan(state: AgentState) -> AgentState:
         )
 
     # 动态生成可用工具列表（消融实验时 TOOL_REGISTRY 可能被过滤）
+    # _ensure_tools()里 _ALL_TOOLS 已经初始化过，这里不会再重复导入工具模块了。
+    # TOOL_REGISTRY 可使用的工具依赖于build_graph()中实际注册了哪些工具
     from agents.executor import TOOL_REGISTRY, _ensure_tools
     _ensure_tools()
     tools_section = "\n".join(

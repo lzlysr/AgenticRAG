@@ -79,6 +79,8 @@ def _match_entities(query: str, top_k: int = GRAPH_TOP_ENTITIES, device: str = N
 def _bfs_collect_chunks(G: nx.MultiDiGraph, seed_entities: list[str],
                         max_hops: int = GRAPH_MAX_HOPS) -> dict[str, float]:
     """从种子实体出发 BFS 遍历，收集相关 chunk_id 及其分数
+    
+    相对于同一条 BFS 路径的根 seed，非根实体只会 decay，分数不会超过该 seed；但在多个 seed 混合排序时，某个高分 seed 的邻居可能超过低分 seed 的根节点。
 
     返回 {chunk_id: score}，score 基于距离衰减
     """
