@@ -51,6 +51,7 @@ def synthesize(state: AgentState) -> AgentState:
 
     profile = get_profile()
     prompt = profile["synthesizer"].format(query=query, evidence_text=evidence_text or "No evidence available.")
+    # 这里的prompt包含了原始问题和一大堆证据文本，内容是不是太多了？还得是react！
     answer = agent_chat(prompt)
     answer = _extract_short_answer(answer)
 
