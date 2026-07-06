@@ -15,17 +15,33 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import ACTIVE_DATA_DIR, RESULTS_DIR
 
 
+def _matches_subset_filter(qa: dict, subset: str) -> bool:
+    """支持精确 subset、按跳数筛选、按类型筛选。"""
+    if qa.get("subset") == subset:
+        return True
+
+    subset = subset.lower()
+    if subset.endswith("hop") and subset[:-3].isdigit():
+        return qa.get("hop_count") == int(subset[:-3])
+    if subset in {"inference", "comparison"}:
+        return qa.get("qa_type") == subset
+    return False
+
+
 def load_qa_pairs(subset: str | None = None, data_dir: str | None = None) -> list:
     """
     加载 QA 数据
     
-    subset： 可选的子集名称，用于只加载特定子集的数据。比如 3hop_inference、2hop_comparison。默认 None，评全部。
+    subset：可选筛选条件。
+    - 精确 subset：3hop_inference、2hop_comparison
+    - 按跳数聚合：2hop、3hop、4hop
+    - 按类型聚合：inference、comparison
     """
     qa_path = os.path.join(data_dir or ACTIVE_DATA_DIR, "qa_pairs.json")
     with open(qa_path, "r", encoding="utf-8") as f:
         qa_pairs = json.load(f)
     if subset:
-        qa_pairs = [q for q in qa_pairs if q["subset"] == subset]
+        qa_pairs = [q for q in qa_pairs if _matches_subset_filter(q, subset)]
     return qa_pairs
 
 
@@ -322,7 +338,10 @@ def run_full_eval(
     tag = subset or "all"
     model_tag = f"_{model}" if model else ""
     data_tag = "_financial" if data_dir and "financial" in data_dir else ""
-    out_path = os.path.join(RESULTS_DIR, f"eval_{tag}_{n}{model_tag}{data_tag}.json")
+    if use_llm_judge:
+        out_path = os.path.join(RESULTS_DIR, f"eval_{tag}_{n}{model_tag}{data_tag}_llm_judge.json")
+    else:
+        out_path = os.path.join(RESULTS_DIR, f"eval_{tag}_{n}{model_tag}{data_tag}.json")
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
 
@@ -343,11 +362,11 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     # --subset：只评某个 subset，比如 3hop_inference、2hop_comparison。默认 None，评全部。
-    parser.add_argument("--subset", default=None)
+    parser.add_argument("--subset", default='2hop')
     # --max-samples：最多评多少条，默认 5。是在加载并按 subset 过滤后取前 N 条。
     parser.add_argument("--max-samples", type=int, default=1305)
     # --model：覆盖 AGENT_LLM_MODEL。默认 None，用 .env/config.py 里的 AGENT_LLM_MODEL。
-    parser.add_argument("--model", default='Qwen3-4B', help="Override AGENT_LLM_MODEL")
+    parser.add_argument("--model", default='Qwen3-8B', help="Override AGENT_LLM_MODEL")
     parser.add_argument("--workers", type=int, default=10, help="Parallel workers")
     # --llm-judge：是否额外启用 LLM-as-a-Judge。默认不开。开启后每条样本会额外调用 correctness 和 faithfulness judge。
     parser.add_argument("--llm-judge", default=False, action="store_true")
