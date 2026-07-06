@@ -2,6 +2,7 @@
 评测主入口
 QA数据 → LangGraph Agent → 推理 → EM/F1 → diagnostics → 可选LLM judge → checkpoint → 汇总
 """
+import pickle
 import json
 import os
 import sys
@@ -81,6 +82,17 @@ def run_full_eval(
 
     qa_pairs = load_qa_pairs(subset, data_dir=data_dir)
     print(f"[eval] Loaded {len(qa_pairs)} QA pairs" + (f" (subset: {subset})" if subset else ""))
+
+    # 使用 LLM judge 时，从当前索引目录加载 chunk_store.pkl，以便 judge context precision
+    corpus_lookup = {}
+    if use_llm_judge:
+        chunk_store_path = os.path.join(index_dir or cfg.ACTIVE_INDEX_DIR, "chunk_store.pkl")
+        if os.path.exists(chunk_store_path):
+            with open(chunk_store_path, "rb") as f:
+                corpus_lookup = pickle.load(f)
+            print(f"[eval] Loaded {len(corpus_lookup)} chunks from chunk_store.pkl for LLM judge")
+        else:
+            print(f"[eval] WARNING: chunk_store.pkl not found at {chunk_store_path}; context precision will use hop answers only")
 
     # GPU 预热：embedder/reranker 指定 GPU（环境变量 RETRIEVAL_DEVICE 或自动选空闲卡）
     import torch
@@ -204,7 +216,11 @@ def run_full_eval(
 
             # 在线的 llm judge
             if use_llm_judge:
-                from evaluation.llm_judge import judge_answer_correctness, judge_faithfulness
+                from evaluation.llm_judge import (
+                    judge_answer_correctness,
+                    judge_faithfulness,
+                    judge_context_precision,
+                )
                 # 原来的200够吗？
                 evidence_text = "\n".join(
                     r.get("text", "")[:1000]
@@ -212,7 +228,23 @@ def run_full_eval(
                     for r in e.get("results", [])[:2]
                 )
                 record["judge_correctness"] = judge_answer_correctness(query, pred, gold)
-                record["judge_faithfulness"] = judge_faithfulness(query, pred, evidence_text)
+                record["judge_faithfulness"] = judge_faithfulness(query, pred, record["evidence_text"])
+                gold_docs_parts = []
+                for h in qa.get("hops", []):
+                    cid = h.get("doc_chunk_id", "")
+                    doc = corpus_lookup.get(cid, {})
+                    doc_text = doc.get("text", h.get("answer", ""))
+                    doc_title = doc.get("title", "")
+                    gold_docs_parts.append(
+                        f"[Gold doc {h.get('hop_idx', '?')}] {doc_title}\n{doc_text}"
+                    )
+                gold_docs_text = "\n\n".join(gold_docs_parts)
+                # evidence_text 是在线 judge 的短上下文；record["evidence_text"] 是保存到结果里的完整检索上下文。context precision 更适合用后者。
+                record["judge_context_precision"] = judge_context_precision(
+                    query,
+                    record["evidence_text"],
+                    gold_docs_text,
+                ) if record["evidence_text"].strip() and gold_docs_text.strip() else 0.0
 
             # 即时写入 checkpoint
             with ckpt_lock:
@@ -281,6 +313,9 @@ def run_full_eval(
         summary["avg_judge_faithfulness"] = round(
             sum(r.get("judge_faithfulness", 0) for r in results) / n, 3
         )
+        summary["avg_judge_context_precision"] = round(
+            sum(r.get("judge_context_precision", 0) for r in results) / n, 3
+        )
 
     # 保存最终结果
     out = {"summary": summary, "results": results}
@@ -310,10 +345,10 @@ if __name__ == "__main__":
     # --subset：只评某个 subset，比如 3hop_inference、2hop_comparison。默认 None，评全部。
     parser.add_argument("--subset", default=None)
     # --max-samples：最多评多少条，默认 5。是在加载并按 subset 过滤后取前 N 条。
-    parser.add_argument("--max-samples", type=int, default=5)
+    parser.add_argument("--max-samples", type=int, default=1305)
     # --model：覆盖 AGENT_LLM_MODEL。默认 None，用 .env/config.py 里的 AGENT_LLM_MODEL。
-    parser.add_argument("--model", default=None, help="Override AGENT_LLM_MODEL")
-    parser.add_argument("--workers", type=int, default=1, help="Parallel workers")
+    parser.add_argument("--model", default='Qwen3-4B', help="Override AGENT_LLM_MODEL")
+    parser.add_argument("--workers", type=int, default=10, help="Parallel workers")
     # --llm-judge：是否额外启用 LLM-as-a-Judge。默认不开。开启后每条样本会额外调用 correctness 和 faithfulness judge。
     parser.add_argument("--llm-judge", default=False, action="store_true")
     parser.add_argument("--resume", default=True, action="store_true", help="Resume from checkpoint")
