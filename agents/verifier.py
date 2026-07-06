@@ -10,7 +10,7 @@
 import sys, os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from llm.client import judge_chat_json
+from llm.client import judge_chat_json, agent_chat_json
 from agents.state import AgentState
 from agents.prompts import get_profile
 
@@ -52,7 +52,7 @@ def verify(state: AgentState) -> AgentState:
     # profile = get_profile(os.environ.get("JUDGE_LLM_MODEL")) 
     profile = get_profile()
     prompt = profile["verifier"].format(query=query, evidence_text=evidence_text or "No evidence collected.")
-    result = judge_chat_json(prompt)
+    result = agent_chat_json(prompt)
 
     verdict = "sufficient"
     feedback = ""
