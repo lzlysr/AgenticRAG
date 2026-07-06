@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 # 环境变量
 # ══════════════════════════════════════════════════════════════════
 VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://localhost:9097/v1")
+VLLM_8B_URL = os.environ.get("VLLM_8B_URL", "http://localhost:9098/v1")
 VLLM_32B_URL = os.environ.get("VLLM_32B_URL", "http://localhost:9094/v1")
 JUDGE_BASE_URL = os.environ.get("JUDGE_BASE_URL", "http://localhost:8086/v1")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
@@ -81,6 +82,11 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         url=VLLM_BASE_URL,
         model_name="Qwen3-4B",
         max_len=20000,
+    ),
+    "Qwen3-8B": ModelConfig(
+        url=VLLM_8B_URL,
+        model_name="Qwen3-8B",
+        max_len=25000,
     ),
     "Qwen3-32B": ModelConfig(
         url=VLLM_32B_URL,
