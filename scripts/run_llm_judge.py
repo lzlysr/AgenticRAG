@@ -1,4 +1,4 @@
-"""离线 LLM Judge 评测脚本：对已有全量结果运行 judge 评分。评“答案好不好”
+"""离线 LLM Judge 评测脚本：对已有全量结果运行 judge 评分，补充 LLM judge，评“答案好不好”
 
 支持三个维度：
 - judge_correctness: 答案正确性（只需 question + pred + gold，始终可离线评估）
