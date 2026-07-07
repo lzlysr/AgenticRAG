@@ -5,10 +5,10 @@
 
 用法：
   # 需要先启动 vLLM
-  python scripts/eval_agentic.py --model Qwen3-4B-GRPO-v4e --port 9099
+  python scripts/eval_agentic.py --model Qwen3-4B-GRPO-v4e
 
   # 指定最大轮次和样本数
-  python scripts/eval_agentic.py --model Qwen3-4B-GRPO-v4e --port 9099 \
+  python scripts/eval_agentic.py --model Qwen3-4B-GRPO-v4e \
     --max-turns 7 --max-samples 185
 """
 import argparse
@@ -16,19 +16,51 @@ import json
 import os
 import pickle
 import re
-import string
 import sys
 import time
-import unicodedata
-from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 
 import numpy as np
-from openai import OpenAI
 from tqdm import tqdm
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from evaluation.hop_aware_eval import compute_hop_recall, aggregate_diagnostics
+from evaluation.metrics import exact_match, f1_score
+from evaluation.ablation import load_financial_qa_pairs
+from llm.client import get_from_llm
+from config import RESULTS_DIR, ACTIVE_DATA_DIR, ACTIVE_INDEX_DIR
+from retrieval.keyword_search import tokenize
+
+DEFAULT_FINANCIAL_QA_FILES = [
+    os.path.join(ACTIVE_DATA_DIR, "train_qa_pairs_zh_clean.json"),
+    os.path.join(ACTIVE_DATA_DIR, "qa_pairs_zh_clean.json"),
+]
+
+
+def _select_retrieval_device() -> str:
+    """选择检索模型设备：优先 RETRIEVAL_DEVICE，否则选显存占用最少的 GPU。"""
+    env_device = os.environ.get("RETRIEVAL_DEVICE")
+    if env_device:
+        return env_device
+    import torch
+    if not torch.cuda.is_available():
+        return "cpu"
+
+    mem_used = []
+    for i in range(torch.cuda.device_count()):
+        free, total = torch.cuda.mem_get_info(i)
+        mem_used.append(total - free)
+    gpu_idx = mem_used.index(min(mem_used))
+    return f"cuda:{gpu_idx}"
+
+
+def _resolve_qa_file(path: str) -> str:
+    """裸文件名默认从 ACTIVE_DATA_DIR 下读取；显式路径按原样读取。"""
+    if os.path.isabs(path) or os.path.exists(path):
+        return path
+    return os.path.join(ACTIVE_DATA_DIR, path)
 
 # ── 与 SFT/GRPO 一致的配置 ──────────────────────────────────────
 
@@ -43,17 +75,18 @@ TOOL_SCHEMAS = [
 
 # ── 检索工具 ──────────────────────────────────────────────────────
 
-_retrieval = {"chunk_store": None, "chunk_ids": None, "bm25": None,
-              "faiss_index": None, "graph": None, "entity_data": None,
-              "embedder": None, "reranker": None}
+_retrieval = {"chunk_store": None, "chunk_ids": None, "bm25": None}
 _lock = Lock()
 
 
-def _load_retrieval(index_dir: str, device: str):
-    """加载检索索引（BM25 + FAISS + Graph + Embedder + Reranker）"""
+def _load_retrieval(device: str):
+    """从 config.ACTIVE_INDEX_DIR 加载 keyword_search 所需索引。"""
     with _lock:
         if _retrieval["chunk_store"] is not None:
             return
+
+        index_dir = ACTIVE_INDEX_DIR
+        os.environ.setdefault("RETRIEVAL_DEVICE", device)
 
         with open(os.path.join(index_dir, "chunk_ids.json")) as f:
             _retrieval["chunk_ids"] = json.load(f)
@@ -62,137 +95,90 @@ def _load_retrieval(index_dir: str, device: str):
         with open(os.path.join(index_dir, "bm25.pkl"), "rb") as f:
             _retrieval["bm25"] = pickle.load(f)
 
-        import faiss
-        _retrieval["faiss_index"] = faiss.read_index(os.path.join(index_dir, "faiss.index"))
+        if device != "cpu":
+            import retrieval.embedder as _emb
+            import retrieval.reranker as _rnk
 
-        import networkx as nx
-        with open(os.path.join(index_dir, "knowledge_graph.json")) as f:
-            _retrieval["graph"] = nx.node_link_graph(json.load(f))
-        with open(os.path.join(index_dir, "entity_embeddings.pkl"), "rb") as f:
-            _retrieval["entity_data"] = pickle.load(f)
+            _orig_emb_get = _emb._get_model
+            _orig_rnk_get = _rnk._get_model
 
-        from sentence_transformers import SentenceTransformer, CrossEncoder
-        _retrieval["embedder"] = SentenceTransformer(
-            os.environ.get("BGE_M3_PATH", "models/bge-m3"), device=device)
-        _retrieval["reranker"] = CrossEncoder(
-            os.environ.get("BGE_RERANKER_PATH", "models/bge-reranker-v2-m3"),
-            max_length=512, device=device)
-        print(f"[eval] Retrieval loaded on {device}")
+            def _emb_get_device(requested_device=None):
+                return _orig_emb_get(requested_device or device)
 
+            def _rnk_get_device(requested_device=None):
+                return _orig_rnk_get(requested_device or device)
 
-def _tokenize(text: str) -> list[str]:
-    import jieba
-    tokens = []
-    for part in re.split(r'([\u4e00-\u9fff]+)', text.lower()):
-        if re.match(r'^[\u4e00-\u9fff]+$', part):
-            tokens.extend(jieba.lcut(part))
-        else:
-            tokens.extend(part.split())
-    return [t for t in tokens if t.strip()]
+            _emb._get_model = _emb_get_device
+            _rnk._get_model = _rnk_get_device
+            _emb_get_device()
+            _rnk_get_device()
+
+        print(f"[eval] Retrieval loaded from {index_dir} on {device}")
 
 
-def _keyword_search(query: str, top_k=3, max_len=300) -> str:
-    scores = _retrieval["bm25"].get_scores(_tokenize(query))
-    top_idx = np.argsort(scores)[::-1][:top_k]
+def _format_tool_results(results: list[dict], max_len: int = 300) -> str:
+    '''格式化检索结果为字符串，截断每条文本到 max_len 字符'''
     parts = []
+    for item in results:
+        cid = item.get("chunk_id", "")
+        text = item.get("text", "")
+        if cid and text:
+            parts.append(f"[{cid}] {text[:max_len]}")
+    return "\n".join(parts) if parts else "(no results)"
+
+
+def _keyword_search_results(query: str, top_k=3) -> list[dict]:
+    scores = _retrieval["bm25"].get_scores(tokenize(query))
+    top_idx = np.argsort(scores)[::-1][:top_k]
+    results = []
     for idx in top_idx:
         if scores[idx] <= 0:
             break
         cid = _retrieval["chunk_ids"][idx]
-        text = _retrieval["chunk_store"].get(cid, {}).get("text", "")
-        parts.append(f"[{cid}] {text[:max_len]}")
-    return "\n".join(parts) if parts else "(no results)"
+        doc = _retrieval["chunk_store"].get(cid, {})
+        results.append({
+            "chunk_id": cid,
+            "text": doc.get("text", ""),
+            "title": doc.get("title", ""),
+            "score": float(scores[idx]),
+            "source": "bm25",
+        })
+    return results
+
+
+def _keyword_search(query: str, top_k=3, max_len=300) -> str:
+    return _format_tool_results(_keyword_search_results(query, top_k=top_k), max_len=max_len)
 
 
 def _semantic_search(query: str, top_k=3, max_len=300) -> str:
-    q_vec = _retrieval["embedder"].encode([query], normalize_embeddings=True)
-    scores, indices = _retrieval["faiss_index"].search(q_vec, 20)
-    candidates = []
-    for i, idx in enumerate(indices[0]):
-        if idx == -1:
-            continue
-        cid = _retrieval["chunk_ids"][idx]
-        doc = _retrieval["chunk_store"].get(cid, {})
-        candidates.append({"chunk_id": cid, "text": doc.get("text", ""), "score": float(scores[0][i])})
-    # rerank
-    if len(candidates) > top_k:
-        passages = [c["text"] for c in candidates[:15]]
-        rs = _retrieval["reranker"].predict([[query, p] for p in passages])
-        ranked = sorted(enumerate(rs), key=lambda x: x[1], reverse=True)
-        candidates = [candidates[i] for i, _ in ranked[:top_k]]
-    else:
-        candidates = candidates[:top_k]
-    parts = [f"[{c['chunk_id']}] {c['text'][:max_len]}" for c in candidates]
-    return "\n".join(parts) if parts else "(no results)"
+    from retrieval.semantic_search import semantic_search
+
+    results = semantic_search(query, top_k=15, rerank_top_k=top_k)
+    return _format_tool_results(results, max_len=max_len)
 
 
 def _graph_search(query: str, top_k=3, max_len=300) -> str:
-    from collections import deque
-    entities = _retrieval["entity_data"]["entities"]
-    embeddings = _retrieval["entity_data"]["embeddings"]
-    q_vec = _retrieval["embedder"].encode([query], normalize_embeddings=True)
-    scores = (embeddings @ q_vec.T).flatten()
-    top_ent = [entities[i] for i in np.argsort(scores)[::-1][:5] if scores[i] > 0.3]
-    if not top_ent:
-        return "(no results)"
-    graph = _retrieval["graph"]
-    chunk_scores, visited, queue = {}, set(), deque()
-    for ent in top_ent:
-        if ent in graph:
-            queue.append((ent, 0)); visited.add(ent)
-    while queue:
-        node, depth = queue.popleft()
-        if depth > 2:
-            continue
-        for cid in graph.nodes[node].get("chunk_ids", []):
-            chunk_scores[cid] = max(chunk_scores.get(cid, 0), 1.0 / (1 + depth))
-        if depth < 2:
-            for nb in graph.neighbors(node):
-                if nb not in visited:
-                    visited.add(nb); queue.append((nb, depth + 1))
-    sorted_chunks = sorted(chunk_scores.items(), key=lambda x: x[1], reverse=True)[:20]
-    candidates = []
-    for cid, sc in sorted_chunks:
-        doc = _retrieval["chunk_store"].get(cid, {})
-        if doc:
-            candidates.append({"chunk_id": cid, "text": doc.get("text", ""), "score": sc})
-    if len(candidates) > top_k:
-        passages = [c["text"] for c in candidates[:15]]
-        rs = _retrieval["reranker"].predict([[query, p] for p in passages])
-        ranked = sorted(enumerate(rs), key=lambda x: x[1], reverse=True)
-        candidates = [candidates[i] for i, _ in ranked[:top_k]]
-    parts = [f"[{c['chunk_id']}] {c['text'][:max_len]}" for c in candidates]
-    return "\n".join(parts) if parts else "(no results)"
+    from retrieval.graph_search import graph_search
+
+    results = graph_search(query, top_k=top_k)
+    return _format_tool_results(results, max_len=max_len)
 
 
 def _hybrid_search(query: str, tools: list = None, top_k=3, max_len=300) -> str:
     tools = tools or ["keyword_search", "semantic_search"]
-    all_results = []
-    tool_fns = {"keyword_search": _keyword_search, "semantic_search": _semantic_search, "graph_search": _graph_search}
-    for t in tools:
-        fn = tool_fns.get(t)
-        if fn:
-            raw = fn(query, top_k=10, max_len=max_len)
-            for line in raw.split("\n"):
-                m = re.match(r'\[([^\]]+)\]\s*(.*)', line)
-                if m:
-                    all_results.append({"chunk_id": m.group(1), "text": m.group(2)})
-    # RRF
-    chunk_scores, chunk_data = {}, {}
-    for rank, r in enumerate(all_results):
-        cid = r["chunk_id"]
-        chunk_scores[cid] = chunk_scores.get(cid, 0) + 1.0 / (60 + rank + 1)
-        if cid not in chunk_data:
-            chunk_data[cid] = r
-    sorted_ids = sorted(chunk_scores, key=lambda x: chunk_scores[x], reverse=True)
-    candidates = [chunk_data[cid] for cid in sorted_ids[:15]]
-    if len(candidates) > top_k:
-        passages = [c["text"] for c in candidates]
-        rs = _retrieval["reranker"].predict([[query, p] for p in passages])
-        ranked = sorted(enumerate(rs), key=lambda x: x[1], reverse=True)
-        candidates = [candidates[i] for i, _ in ranked[:top_k]]
-    parts = [f"[{c['chunk_id']}] {c['text'][:max_len]}" for c in candidates]
-    return "\n".join(parts) if parts else "(no results)"
+    if isinstance(tools, str):
+        tools = [t.strip() for t in tools.split(",") if t.strip()]
+    from retrieval.graph_search import graph_search
+    from retrieval.hybrid_search import multi_tool_search
+    from retrieval.semantic_search import semantic_search
+
+    tool_registry = {
+        "keyword_search": lambda q: _keyword_search_results(q, top_k=10),
+        "semantic_search": lambda q: semantic_search(q, top_k=15, rerank_top_k=10),
+        "graph_search": lambda q: graph_search(q, top_k=10),
+    }
+    results = multi_tool_search(query, tools, tool_registry, top_k=top_k)
+    return _format_tool_results(results, max_len=max_len)
 
 
 TOOL_DISPATCH = {
@@ -204,45 +190,9 @@ TOOL_DISPATCH = {
 
 # ── 答案提取与评分 ──────────────────────────────────────────────────
 
-_CN_PUNCTUATION = '。，、；：？！""''【】《》（）｛｝〔〕·…—～'
-_ALL_PUNCTUATION = set(string.punctuation) | set(_CN_PUNCTUATION)
-
-
-def _normalize(text: str) -> str:
-    result = []
-    for ch in text:
-        code = ord(ch)
-        if 0xFF01 <= code <= 0xFF5E:
-            result.append(chr(code - 0xFEE0))
-        elif ch == '\u3000':
-            result.append(' ')
-        elif unicodedata.category(ch).startswith('Zs'):
-            result.append(' ')
-        else:
-            result.append(ch)
-    text = ''.join(result).lower()
-    text = ''.join(ch for ch in text if ch not in _ALL_PUNCTUATION)
-    text = re.sub(r'(\d)([\u4e00-\u9fff])', r'\1 \2', text)
-    text = re.sub(r'([\u4e00-\u9fff])(\d)', r'\1 \2', text)
-    text = re.sub(r"\b(a|an|the)\b", " ", text)
-    text = " ".join(text.split())
-    return text
-
-
-def _token_f1(pred: str, gold: str) -> float:
-    pt, gt = _normalize(pred).split(), _normalize(gold).split()
-    if not gt:
-        return 1.0 if not pt else 0.0
-    if not pt:
-        return 0.0
-    common = sum((Counter(pt) & Counter(gt)).values())
-    if common == 0:
-        return 0.0
-    p, r = common / len(pt), common / len(gt)
-    return 2 * p * r / (p + r)
-
 
 def _extract_answer(text: str) -> str:
+    '''从模型完整输出轨迹里提取最终答案字符串，用来算 EM/F1。'''
     matches = list(re.finditer(r"<answer>(.*?)</answer>", text, re.DOTALL))
     if matches:
         return matches[-1].group(1).strip()
@@ -251,8 +201,7 @@ def _extract_answer(text: str) -> str:
 
 
 def _best_f1(pred: str, gold: str, aliases: list) -> float:
-    candidates = [gold] + [a for a in aliases if a]
-    return max(_token_f1(pred, c) for c in candidates)
+    return f1_score(pred, gold, aliases=[a for a in aliases if a])
 
 
 # ── 单样本 Agentic 推理 ──────────────────────────────────────────
@@ -270,8 +219,8 @@ def _build_system_prompt_with_tools() -> str:
     return AGENTIC_SYSTEM_PROMPT + tools_text
 
 
-def run_agentic_single(client: OpenAI, model: str, question: str,
-                       max_turns: int = 7, temperature: float = 0.7) -> dict:
+def run_agentic_single(model: str, question: str,
+                       max_turns: int = 7) -> dict:
     """单个问题的 agentic 推理：多轮 tool_call → answer"""
     system_prompt = _build_system_prompt_with_tools()
     messages = [
@@ -280,24 +229,24 @@ def run_agentic_single(client: OpenAI, model: str, question: str,
     ]
 
     tool_calls_made = []
-    evidence_pieces = []  # 收集所有检索到的 evidence
+    evidence_pieces = []  # 收集所有检索到的 evidence（字符串）
+    structured_evidence = []  # 结构化 evidence，用于 tool_call_metrics
     full_trajectory = ""
     num_assistant_turns = 0
 
     for turn in range(max_turns):
         try:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
+            # 不能用 agent_chat_json()：这里需要保留原始 XML tool_call/answer 文本，
+            # agent_chat_json() 会把回复当 JSON 解析，解析失败时还会丢掉原始工具调用轨迹。
+            content = get_from_llm(
+                messages,
+                model_name=model,
                 max_tokens=1024,
-            )
+            ) or ""
         except Exception as e:
             full_trajectory += f"\n[ERROR] {e}"
             break
 
-        choice = resp.choices[0]
-        content = choice.message.content or ""
         num_assistant_turns += 1
         full_trajectory += content
 
@@ -316,6 +265,14 @@ def run_agentic_single(client: OpenAI, model: str, question: str,
                 result = tool_fn(fn_args) if tool_fn else f"(unknown tool: {fn_name})"
                 evidence_pieces.append(result)
 
+                # 从结果字符串中解析 chunk_id（格式: "[chunk_id] text..."）
+                chunk_ids = re.findall(r'^\[([^\]]+)\]', result, re.MULTILINE)
+                structured_evidence.append({
+                    "tool": fn_name,
+                    "query": fn_args.get("query", ""),
+                    "results": [{"chunk_id": cid} for cid in chunk_ids],
+                })
+
                 messages.append({"role": "assistant", "content": content})
                 messages.append({"role": "user", "content": f"<tool_response>\n{result}\n</tool_response>"})
                 full_trajectory += f"\n[tool:{fn_name}] {result[:200]}...\n"
@@ -330,6 +287,7 @@ def run_agentic_single(client: OpenAI, model: str, question: str,
     return {
         "trajectory": full_trajectory,
         "tool_calls": tool_calls_made,
+        "structured_evidence": structured_evidence,
         "num_turns": num_assistant_turns,
         "answer": _extract_answer(full_trajectory),
         "evidence": "\n".join(evidence_pieces),
@@ -340,44 +298,42 @@ def run_agentic_single(client: OpenAI, model: str, question: str,
 
 def main():
     parser = argparse.ArgumentParser(description="Agentic evaluation")
-    parser.add_argument("--model", required=True, help="Model name in vLLM or remote API")
-    parser.add_argument("--port", type=int, default=9099)
-    parser.add_argument("--api-base", default=None,
-                        help="Override API base URL (e.g. http://172.24.40.164:8086/v1 or https://kspmas.ksyun.com/v1/)")
-    parser.add_argument("--api-key", default="EMPTY",
-                        help="API key (default: EMPTY for vLLM)")
-    parser.add_argument("--max-samples", type=int, default=185)
+    parser.add_argument("--model", default='Qwen3-4B')
+    parser.add_argument("--max-samples", type=int, default=982) # 训练 797 + 测试 185
+    # 单个问题最多允许模型进行多少轮 assistant 回复
     parser.add_argument("--max-turns", type=int, default=7)
-    parser.add_argument("--data-dir", default="data/financial_eval_zh")
-    parser.add_argument("--index-dir", default="data/financial_all/indexes")
-    parser.add_argument("--device", default=None, help="Retrieval device (default: env RETRIEVAL_DEVICE or cuda:1)")
-    parser.add_argument("--workers", type=int, default=5)
-    parser.add_argument("--temperature", type=float, default=0.7)
+    parser.add_argument(
+        "--qa-files-financial",
+        default='qa_pairs_zh_clean.json',
+        help=(
+            "Comma-separated financial QA JSON files. Default combines "
+            "train_qa_pairs_zh_clean.json and qa_pairs_zh_clean.json."
+        ),
+    )
+    parser.add_argument("--workers", type=int, default=10)
     args = parser.parse_args()
 
-    device = args.device or os.environ.get("RETRIEVAL_DEVICE", "cuda:1")
+    device = _select_retrieval_device()
 
     # 加载检索索引
     print(f"[eval] Loading retrieval on {device}...")
-    _load_retrieval(args.index_dir, device)
+    _load_retrieval(device)
 
     # 加载 QA 数据
-    qa_path = os.path.join(args.data_dir, "qa_pairs.json")
-    with open(qa_path) as f:
-        qa_data = json.load(f)
+    if args.qa_files_financial:
+        qa_files = [_resolve_qa_file(p.strip()) for p in args.qa_files_financial.split(",") if p.strip()]
+    else:
+        qa_files = DEFAULT_FINANCIAL_QA_FILES
+    qa_data = load_financial_qa_pairs(qa_files)
     qa_data = qa_data[:args.max_samples]
     print(f"[eval] {len(qa_data)} samples loaded")
-
-    base_url = args.api_base or f"http://localhost:{args.port}/v1"
-    client = OpenAI(api_key=args.api_key, base_url=base_url)
-    print(f"[eval] API base: {base_url}, model: {args.model}")
 
     results = []
     total_em, total_f1 = 0, 0
 
     pbar = tqdm(total=len(qa_data), desc=f"Agentic {args.model}")
 
-    def _eval_one(item):
+    def _eval_one(idx, item):
         question = item.get("final_question", item.get("question", ""))
         gold = item.get("final_answer", item.get("answer", item.get("target", "")))
         aliases = item.get("answer_aliases", [])
@@ -391,15 +347,28 @@ def main():
             hops = int(hops)
 
         t0 = time.time()
-        out = run_agentic_single(client, args.model, question,
-                                 max_turns=args.max_turns, temperature=args.temperature)
+        out = run_agentic_single(args.model, question, max_turns=args.max_turns)
         elapsed = time.time() - t0
 
         pred = out["answer"]
         f1 = _best_f1(pred, gold, aliases)
-        em = 1.0 if _normalize(pred) == _normalize(gold) else 0.0
+        em = exact_match(pred, gold, aliases=aliases)
+
+        state_like = {"evidence": out["structured_evidence"]}
+        hop_recall = compute_hop_recall(state_like, item)
+        diagnostics = {
+            "hop_recall": round(hop_recall, 3),
+            "premature_collapse": hop_recall < 0.5 and len(out["tool_calls"]) == 0,
+            "over_extension": len(out["tool_calls"]) > hops * 3,
+            "step_alignment": round(len(out["structured_evidence"]) / hops, 3) if hops > 0 else 0,
+            "hop_count": hops,
+            "total_tool_calls": len(out["tool_calls"]),
+            "iteration_count": out["num_turns"],
+            "evidence_count": len(out["structured_evidence"]),
+        }
 
         return {
+            "idx": idx,
             "question": question,
             "gold": gold,
             "pred": pred,
@@ -409,12 +378,13 @@ def main():
             "num_tool_calls": len(out["tool_calls"]),
             "tool_calls": out["tool_calls"],
             "evidence": out["evidence"],
+            "diagnostics": diagnostics,
             "latency": elapsed,
             "hops": hops,
         }
 
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = {pool.submit(_eval_one, item): i for i, item in enumerate(qa_data)}
+        futures = {pool.submit(_eval_one, i, item): i for i, item in enumerate(qa_data)}
         for future in as_completed(futures):
             r = future.result()
             results.append(r)
@@ -425,6 +395,8 @@ def main():
             pbar.set_postfix_str(f"EM={total_em/n:.3f} F1={total_f1/n:.3f}")
 
     pbar.close()
+    # 并发写入时，写入顺序可能乱，所以再次按 idx 排序
+    results = sorted(results, key=lambda r: r["idx"])
 
     # 汇总
     n = len(results)
@@ -448,6 +420,7 @@ def main():
         "avg_turns": avg_turns,
         "avg_tool_calls": avg_tool_calls,
         "avg_latency": avg_latency,
+        "diagnostics": aggregate_diagnostics([r["diagnostics"] for r in results]),
         "by_hop": {},
     }
     for h, items in sorted(by_hop.items()):
@@ -472,7 +445,10 @@ def main():
         print(f"    {h}: EM={s['em']:.3f} F1={s['f1']:.3f} turns={s['avg_turns']:.1f} tools={s['avg_tool_calls']:.1f} (n={s['count']})")
 
     # 保存
-    out_path = f"results/agentic_{args.model}.json"
+    out_dir = os.path.join(RESULTS_DIR, "eval_agentic", "financial")
+    os.makedirs(out_dir, exist_ok=True)
+    safe_model = args.model.replace("/", "_")
+    out_path = os.path.join(out_dir, f"agentic_{n}_{safe_model}.json")
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump({"summary": summary, "results": results}, f, ensure_ascii=False, indent=2)
     print(f"\n  Saved to {out_path}")
