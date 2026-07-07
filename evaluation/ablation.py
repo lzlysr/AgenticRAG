@@ -8,13 +8,13 @@ from threading import Lock
 from tqdm import tqdm
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import RESULTS_DIR
+from config import RESULTS_DIR, ACTIVE_DATA_DIR
 
 ABLATION_RESULTS_DIR = os.path.join(RESULTS_DIR, "ablation", "RAGtracer")
 PROMPT_PROFILE_TAG = "small"
 DEFAULT_FINANCIAL_QA_FILES = [
-    os.path.join("data", "financial_eval", "train_qa_pairs_zh_clean.json"),
-    os.path.join("data", "financial_eval", "qa_pairs_zh_clean.json"),
+    os.path.join(ACTIVE_DATA_DIR, "train_qa_pairs_zh_clean.json"),
+    os.path.join(ACTIVE_DATA_DIR, "qa_pairs_zh_clean.json"),
 ]
 
 ABLATION_CONFIGS = {
