@@ -1,4 +1,5 @@
 """Prompt 分级管理：按模型能力加载不同 prompt 和配置参数，支持中英文切换"""
+import os
 import re
 from config import AGENT_LLM_MODEL
 
@@ -339,11 +340,16 @@ def get_profile(model_name: str | None = None) -> dict:
     """根据模型名称和语言返回对应的 prompt profile。
 
     规则：模型名包含 4B/7B/8B/14B → small，其余 → large。
+    显式覆盖：config.PROMPT_PROFILE 或环境变量 PROMPT_PROFILE = small/large。
     语言：config.PROMPT_LANG = "zh" 时使用中文 prompt。
     """
-    if model_name is None:
-        model_name = AGENT_LLM_MODEL
-    size = "small" if _SMALL_PATTERN.search(model_name) else "large"
     import config
+    forced_profile = getattr(config, "PROMPT_PROFILE", None) or os.environ.get("PROMPT_PROFILE")
+    if forced_profile in {"small", "large"}:
+        size = forced_profile
+    else:
+        if model_name is None:
+            model_name = getattr(config, "AGENT_LLM_MODEL", AGENT_LLM_MODEL)
+        size = "small" if _SMALL_PATTERN.search(model_name) else "large"
     lang_suffix = "_zh" if getattr(config, "PROMPT_LANG", "en") == "zh" else ""
     return PROMPT_PROFILES[size + lang_suffix]
