@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import RESULTS_DIR
 
 ABLATION_RESULTS_DIR = os.path.join(RESULTS_DIR, "ablation", "RAGtracer")
+PROMPT_PROFILE_TAG = "large"
 
 ABLATION_CONFIGS = {
     "full_system": {
@@ -41,7 +42,7 @@ ABLATION_CONFIGS = {
 
 
 def _get_checkpoint_path(config_name: str, model: str | None = None) -> str:
-    model_tag = f"_{model}" if model else ""
+    model_tag = f"_{model}_{PROMPT_PROFILE_TAG}" if model else f"_{PROMPT_PROFILE_TAG}"
     return os.path.join(ABLATION_RESULTS_DIR, f"ablation_{config_name}{model_tag}.checkpoint.jsonl")
 
 
@@ -62,14 +63,18 @@ def run_ablation(config_name: str, qa_pairs: list, max_samples: int = 50,
     """运行单个消融配置（支持多线程 + checkpoint + tqdm）"""
     import config as cfg
     import llm.client as llm_client
+
+    if model:
+        print(f"[ablation] Model: {cfg.AGENT_LLM_MODEL} -> {model}")
+        os.environ["AGENT_LLM_MODEL"] = model
+        cfg.AGENT_LLM_MODEL = model
+        llm_client.AGENT_LLM_MODEL = model
+    os.environ["PROMPT_PROFILE"] = PROMPT_PROFILE_TAG
+    cfg.PROMPT_PROFILE = PROMPT_PROFILE_TAG
+
     from agents.graph import build_graph
     from evaluation.metrics import exact_match, f1_score, CostTracker
     from evaluation.hop_aware_eval import diagnose_failure, aggregate_diagnostics
-
-    if model and cfg.AGENT_LLM_MODEL != model:
-        print(f"[ablation] Model: {cfg.AGENT_LLM_MODEL} -> {model}")
-        cfg.AGENT_LLM_MODEL = model
-        llm_client.AGENT_LLM_MODEL = model
 
     config = ABLATION_CONFIGS[config_name]
     print(f"\n{'='*60}")
@@ -201,7 +206,7 @@ def run_ablation(config_name: str, qa_pairs: list, max_samples: int = 50,
     }
 
     # 保存单配置结果
-    model_tag = f"_{model}" if model else ""
+    model_tag = f"_{model}_{PROMPT_PROFILE_TAG}" if model else f"_{PROMPT_PROFILE_TAG}"
     out_path = os.path.join(ABLATION_RESULTS_DIR, f"ablation_{config_name}_{n}{model_tag}.json")
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
@@ -220,7 +225,7 @@ def run_all_ablations(qa_pairs: list, max_samples: int = 50, configs: list[str] 
     """运行所有消融实验"""
     configs = configs or list(ABLATION_CONFIGS.keys())
     os.makedirs(ABLATION_RESULTS_DIR, exist_ok=True)
-    model_tag = f"_{model}" if model else ""
+    model_tag = f"_{model}_{PROMPT_PROFILE_TAG}" if model else f"_{PROMPT_PROFILE_TAG}"
     out_path = os.path.join(ABLATION_RESULTS_DIR, f"ablation_results{model_tag}.json")
 
     if os.path.exists(out_path):
@@ -291,7 +296,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--max-samples", type=int, default=1305, help="Max samples from all QA pairs")
-    parser.add_argument("--model", default='Qwen3-8B', help="Override AGENT_LLM_MODEL")
+    parser.add_argument("--model", default='Qwen3-4B', help="Override AGENT_LLM_MODEL")
     parser.add_argument("--workers", type=int, default=10, help="Parallel workers")
     parser.add_argument("--resume", default=True, action="store_true", help="Resume from checkpoint")
     parser.add_argument("--data-dir", default=None, help="Override data directory (qa_pairs.json location)")
@@ -299,11 +304,17 @@ if __name__ == "__main__":
     parser.add_argument("--lang", default=None, choices=["en", "zh"], help="Prompt language")
     parser.add_argument(
         "--configs",
-        default=None,
+        default='full_system',
         help=f"Comma-separated ablation configs. Available: {', '.join(ABLATION_CONFIGS.keys())}",
     )
     args = parser.parse_args()
 
+    os.environ["AGENT_LLM_MODEL"] = args.model
+    cfg.AGENT_LLM_MODEL = args.model
+    os.environ["PROMPT_PROFILE"] = PROMPT_PROFILE_TAG
+    cfg.PROMPT_PROFILE = PROMPT_PROFILE_TAG
+    print(f"[ablation] Startup model: {args.model}")
+    print(f"[ablation] Prompt profile override: {PROMPT_PROFILE_TAG}")
 
     if args.lang:
         cfg.PROMPT_LANG = args.lang
