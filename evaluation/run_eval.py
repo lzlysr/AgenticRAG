@@ -14,6 +14,7 @@ from tqdm import tqdm
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import ACTIVE_DATA_DIR, RESULTS_DIR
 
+RUN_EVAL_RESULTS_DIR = os.path.join(RESULTS_DIR, "run_eval", "RAGtracer")
 
 def _matches_subset_filter(qa: dict, subset: str) -> bool:
     """支持精确 subset、按跳数筛选、按类型筛选。"""
@@ -40,6 +41,8 @@ def load_qa_pairs(subset: str | None = None, data_dir: str | None = None) -> lis
     qa_path = os.path.join(data_dir or ACTIVE_DATA_DIR, "qa_pairs.json")
     with open(qa_path, "r", encoding="utf-8") as f:
         qa_pairs = json.load(f)
+    if isinstance(subset, str) and subset.lower() in {"none", "all"}:
+        subset = None
     if subset:
         qa_pairs = [q for q in qa_pairs if _matches_subset_filter(q, subset)]
     return qa_pairs
@@ -48,7 +51,8 @@ def load_qa_pairs(subset: str | None = None, data_dir: str | None = None) -> lis
 def _get_checkpoint_path(model: str | None, subset: str | None) -> str:
     tag = subset or "all"
     model_tag = f"_{model}" if model else ""
-    return os.path.join(RESULTS_DIR, f"eval_{tag}{model_tag}.checkpoint.jsonl")
+    os.makedirs(RUN_EVAL_RESULTS_DIR, exist_ok=True)
+    return os.path.join(RUN_EVAL_RESULTS_DIR, f"eval_{tag}{model_tag}.checkpoint.jsonl")
 
 
 def _load_checkpoint(ckpt_path: str) -> dict[int, dict]:
@@ -339,9 +343,10 @@ def run_full_eval(
     model_tag = f"_{model}" if model else ""
     data_tag = "_financial" if data_dir and "financial" in data_dir else ""
     if use_llm_judge:
-        out_path = os.path.join(RESULTS_DIR, f"eval_{tag}_{n}{model_tag}{data_tag}_llm_judge.json")
+        out_path = os.path.join(RUN_EVAL_RESULTS_DIR, f"eval_{tag}_{n}{model_tag}{data_tag}_llm_judge.json")
     else:
-        out_path = os.path.join(RESULTS_DIR, f"eval_{tag}_{n}{model_tag}{data_tag}.json")
+        out_path = os.path.join(RUN_EVAL_RESULTS_DIR, f"eval_{tag}_{n}{model_tag}{data_tag}.json")
+    os.makedirs(RUN_EVAL_RESULTS_DIR, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
 
@@ -361,8 +366,8 @@ def run_full_eval(
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    # --subset：只评某个 subset，比如 3hop_inference、2hop_comparison。默认 None，评全部。
-    parser.add_argument("--subset", default='2hop')
+    # --subset：只评某个 subset，比如 3hop_inference、3hop、comparison。默认 None，评全部。
+    parser.add_argument("--subset", default=None)
     # --max-samples：最多评多少条，默认 5。是在加载并按 subset 过滤后取前 N 条。
     parser.add_argument("--max-samples", type=int, default=1305)
     # --model：覆盖 AGENT_LLM_MODEL。默认 None，用 .env/config.py 里的 AGENT_LLM_MODEL。
