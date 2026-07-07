@@ -11,7 +11,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import RESULTS_DIR
 
 ABLATION_RESULTS_DIR = os.path.join(RESULTS_DIR, "ablation", "RAGtracer")
-PROMPT_PROFILE_TAG = "large"
+PROMPT_PROFILE_TAG = "small"
+DEFAULT_FINANCIAL_QA_FILES = [
+    os.path.join("data", "financial_eval", "train_qa_pairs_zh_clean.json"),
+    os.path.join("data", "financial_eval", "qa_pairs_zh_clean.json"),
+]
 
 ABLATION_CONFIGS = {
     "full_system": {
@@ -55,6 +59,19 @@ def _load_checkpoint(ckpt_path: str) -> dict[int, dict]:
                     r = json.loads(line)
                     done[r["idx"]] = r
     return done
+
+
+def load_financial_qa_pairs(qa_files: list[str]) -> list[dict]:
+    """加载并拼接金融 train/test clean QA 文件。"""
+    qa_pairs = []
+    for qa_file in qa_files:
+        with open(qa_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, list):
+            raise ValueError(f"Financial QA file must contain a JSON list: {qa_file}")
+        qa_pairs.extend(data)
+        print(f"[ablation] Loaded {len(data)} financial QA pairs from {qa_file}")
+    return qa_pairs
 
 
 def run_ablation(config_name: str, qa_pairs: list, max_samples: int = 50,
@@ -296,15 +313,25 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--max-samples", type=int, default=1305, help="Max samples from all QA pairs")
-    parser.add_argument("--model", default='Qwen3-4B', help="Override AGENT_LLM_MODEL")
+    parser.add_argument("--model", default='Qwen3-8B', help="Override AGENT_LLM_MODEL")
     parser.add_argument("--workers", type=int, default=10, help="Parallel workers")
     parser.add_argument("--resume", default=True, action="store_true", help="Resume from checkpoint")
     parser.add_argument("--data-dir", default=None, help="Override data directory (qa_pairs.json location)")
+    parser.add_argument(
+        "--qa-files-financial",
+        nargs="?",
+        const=",".join(DEFAULT_FINANCIAL_QA_FILES),
+        default=None,
+        help=(
+            "Comma-separated financial QA JSON files to concatenate. "
+            "If provided without value, uses train_qa_pairs_zh_clean.json and qa_pairs_zh_clean.json."
+        ),
+    )
     parser.add_argument("--index-dir", default=None, help="Override index directory")
     parser.add_argument("--lang", default=None, choices=["en", "zh"], help="Prompt language")
     parser.add_argument(
         "--configs",
-        default='full_system',
+        default=None,
         help=f"Comma-separated ablation configs. Available: {', '.join(ABLATION_CONFIGS.keys())}",
     )
     args = parser.parse_args()
@@ -359,8 +386,15 @@ if __name__ == "__main__":
     if args.configs:
         configs = [name.strip() for name in args.configs.split(",") if name.strip()]
 
-    qa_pairs = load_qa_pairs(data_dir=args.data_dir)
-    print(f"[ablation] Loaded {len(qa_pairs)} QA pairs")
+    if args.qa_files_financial:
+        ABLATION_RESULTS_DIR = os.path.join(RESULTS_DIR, "ablation", "financial")
+        qa_files = [p.strip() for p in args.qa_files_financial.split(",") if p.strip()]
+        qa_pairs = load_financial_qa_pairs(qa_files)
+        print(f"[ablation] Financial results dir: {ABLATION_RESULTS_DIR}")
+        print(f"[ablation] Loaded {len(qa_pairs)} financial QA pairs")
+    else:
+        qa_pairs = load_qa_pairs(data_dir=args.data_dir)
+        print(f"[ablation] Loaded {len(qa_pairs)} QA pairs")
 
     run_all_ablations(
         qa_pairs,
@@ -370,3 +404,11 @@ if __name__ == "__main__":
         workers=args.workers,
         resume=args.resume,
     )
+
+# 如果使用金融语料，带上参数 --qa-files-financial
+# python evaluation/ablation.py --qa-files-financial
+# 结果输出到 results/ablation/financial
+
+# 如果使用基础语料，不用参数
+# python evaluation/ablation.py
+# 结果输出到 results/ablation/RAGtracer
