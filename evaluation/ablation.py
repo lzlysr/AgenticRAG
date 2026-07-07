@@ -10,38 +10,39 @@ from tqdm import tqdm
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import RESULTS_DIR
 
+ABLATION_RESULTS_DIR = os.path.join(RESULTS_DIR, "ablation", "RAGtracer")
+
 ABLATION_CONFIGS = {
     "full_system": {
-        "tools": ["keyword_search", "semantic_search", "read_chunk"],
-        "verifier": True,
-        "description": "完整系统（BM25 + FAISS + Reranker + Verifier）",
+        "tools": ["keyword_search", "semantic_search", "graph_search", "read_chunk"],
+        "description": "完整系统（BM25 + FAISS + Graph + read_chunk）",
     },
     "no_keyword": {
-        "tools": ["semantic_search", "read_chunk"],
-        "verifier": True,
+        "tools": ["semantic_search", "graph_search", "read_chunk"],
         "description": "去掉 BM25 关键字搜索",
     },
-    "no_read_chunk": {
-        "tools": ["keyword_search", "semantic_search"],
-        "verifier": True,
-        "description": "去掉 chunk 阅读工具",
+    "no_semantic": {
+        "tools": ["keyword_search", "graph_search", "read_chunk"],
+        "description": "去掉 FAISS 语义搜索",
     },
-    "no_verifier": {
+    "no_graph": {
         "tools": ["keyword_search", "semantic_search", "read_chunk"],
-        "verifier": False,
-        "description": "去掉验证器（无自纠错循环）",
+        "description": "去掉知识图谱搜索",
+    },
+    "no_read_chunk": {
+        "tools": ["keyword_search", "semantic_search", "graph_search"],
+        "description": "去掉 chunk 阅读工具",
     },
     "semantic_only": {
         "tools": ["semantic_search"],
-        "verifier": False,
-        "description": "Naive RAG 基线（仅语义检索，无验证）",
+        "description": "仅保留 FAISS 语义搜索",
     },
 }
 
 
 def _get_checkpoint_path(config_name: str, model: str | None = None) -> str:
     model_tag = f"_{model}" if model else ""
-    return os.path.join(RESULTS_DIR, f"ablation_{config_name}{model_tag}.checkpoint.jsonl")
+    return os.path.join(ABLATION_RESULTS_DIR, f"ablation_{config_name}{model_tag}.checkpoint.jsonl")
 
 
 def _load_checkpoint(ckpt_path: str) -> dict[int, dict]:
@@ -59,27 +60,32 @@ def run_ablation(config_name: str, qa_pairs: list, max_samples: int = 50,
                   use_llm_judge: bool = False, model: str | None = None,
                   workers: int = 1, resume: bool = False) -> dict:
     """运行单个消融配置（支持多线程 + checkpoint + tqdm）"""
+    import config as cfg
+    import llm.client as llm_client
     from agents.graph import build_graph
     from evaluation.metrics import exact_match, f1_score, CostTracker
     from evaluation.hop_aware_eval import diagnose_failure, aggregate_diagnostics
 
+    if model and cfg.AGENT_LLM_MODEL != model:
+        print(f"[ablation] Model: {cfg.AGENT_LLM_MODEL} -> {model}")
+        cfg.AGENT_LLM_MODEL = model
+        llm_client.AGENT_LLM_MODEL = model
+
     config = ABLATION_CONFIGS[config_name]
     print(f"\n{'='*60}")
     print(f"[ablation] Running: {config_name} - {config['description']}")
-    print(f"  Tools: {config['tools']}, Verifier: {config['verifier']}")
+    print(f"  Tools: {config['tools']}")
     print(f"  Model: {model or 'default'}, Workers: {workers}")
     print(f"  Samples: {min(max_samples, len(qa_pairs))}")
     print(f"{'='*60}")
 
-    app = build_graph(
-        enable_verifier=config["verifier"],
-        enabled_tools=config["tools"],
-    )
+    app = build_graph(enabled_tools=config["tools"])
 
     cost = CostTracker()
     samples = qa_pairs[:max_samples]
 
     # Resume
+    os.makedirs(ABLATION_RESULTS_DIR, exist_ok=True)
     ckpt_path = _get_checkpoint_path(config_name, model)
     done_map = {}
     if resume:
@@ -196,7 +202,7 @@ def run_ablation(config_name: str, qa_pairs: list, max_samples: int = 50,
 
     # 保存单配置结果
     model_tag = f"_{model}" if model else ""
-    out_path = os.path.join(RESULTS_DIR, f"ablation_{config_name}_{n}{model_tag}.json")
+    out_path = os.path.join(ABLATION_RESULTS_DIR, f"ablation_{config_name}_{n}{model_tag}.json")
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     print(f"[ablation] {config_name} saved to {out_path}")
@@ -213,6 +219,17 @@ def run_all_ablations(qa_pairs: list, max_samples: int = 50, configs: list[str] 
                       workers: int = 1, resume: bool = False) -> dict:
     """运行所有消融实验"""
     configs = configs or list(ABLATION_CONFIGS.keys())
+    os.makedirs(ABLATION_RESULTS_DIR, exist_ok=True)
+    model_tag = f"_{model}" if model else ""
+    out_path = os.path.join(ABLATION_RESULTS_DIR, f"ablation_results{model_tag}.json")
+
+    if os.path.exists(out_path):
+        with open(out_path, "r", encoding="utf-8") as f:
+            results = json.load(f)
+        print(f"\n[ablation] Existing results loaded from {out_path}")
+        print_comparison_table(results)
+        return results
+
     results = {}
 
     for name in configs:
@@ -225,8 +242,6 @@ def run_all_ablations(qa_pairs: list, max_samples: int = 50, configs: list[str] 
                                      resume=resume)
 
     # 保存汇总
-    model_tag = f"_{model}" if model else ""
-    out_path = os.path.join(RESULTS_DIR, f"ablation_results{model_tag}.json")
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
     print(f"\n[ablation] All results saved to {out_path}")
@@ -266,3 +281,81 @@ def print_comparison_table(results: dict):
             print(f"{name:<20} {em:>6.3f} {f1:>6.3f} {hop:>6.3f} {calls:>6.1f} {lat:>8.1f}")
 
     print(f"{'='*106}" if has_judge else f"{'='*80}")
+
+
+if __name__ == "__main__":
+    import argparse
+    import config as cfg
+
+    from evaluation.run_eval import load_qa_pairs
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--max-samples", type=int, default=1305, help="Max samples from all QA pairs")
+    parser.add_argument("--model", default='Qwen3-8B', help="Override AGENT_LLM_MODEL")
+    parser.add_argument("--workers", type=int, default=10, help="Parallel workers")
+    parser.add_argument("--resume", default=True, action="store_true", help="Resume from checkpoint")
+    parser.add_argument("--data-dir", default=None, help="Override data directory (qa_pairs.json location)")
+    parser.add_argument("--index-dir", default=None, help="Override index directory")
+    parser.add_argument("--lang", default=None, choices=["en", "zh"], help="Prompt language")
+    parser.add_argument(
+        "--configs",
+        default=None,
+        help=f"Comma-separated ablation configs. Available: {', '.join(ABLATION_CONFIGS.keys())}",
+    )
+    args = parser.parse_args()
+
+
+    if args.lang:
+        cfg.PROMPT_LANG = args.lang
+        print(f"[ablation] Prompt lang: {args.lang}")
+
+    if args.index_dir:
+        cfg.ACTIVE_INDEX_DIR = args.index_dir
+        cfg.INDEX_DIR = args.index_dir
+        print(f"[ablation] Index dir: {args.index_dir}")
+
+    # GPU 预热：embedder/reranker 指定 GPU（环境变量 RETRIEVAL_DEVICE 或自动选空闲卡）
+    import torch
+    if torch.cuda.is_available():
+        gpu_device = os.environ.get("RETRIEVAL_DEVICE")
+        if not gpu_device:
+            # 自动选显存占用最少的 GPU
+            mem_used = []
+            for i in range(torch.cuda.device_count()):
+                mem_used.append(torch.cuda.mem_get_info(i)[1] - torch.cuda.mem_get_info(i)[0])
+            gpu_idx = mem_used.index(min(mem_used))
+            gpu_device = f"cuda:{gpu_idx}"
+        import retrieval.embedder as _emb
+        import retrieval.reranker as _rnk
+        # 强制 embedder 和 reranker 加载到指定 GPU 上
+        _orig_emb_get = _emb._get_model
+        _orig_rnk_get = _rnk._get_model
+
+        def _emb_get_gpu(device=None):
+            return _orig_emb_get(device or gpu_device)
+
+        def _rnk_get_gpu(device=None):
+            return _orig_rnk_get(device or gpu_device)
+
+        _emb._get_model = _emb_get_gpu
+        _rnk._get_model = _rnk_get_gpu
+        # 预加载模型
+        _emb_get_gpu()
+        _rnk_get_gpu()
+        print(f"[ablation] Embedder/Reranker pre-loaded on {gpu_device}")
+
+    configs = None
+    if args.configs:
+        configs = [name.strip() for name in args.configs.split(",") if name.strip()]
+
+    qa_pairs = load_qa_pairs(data_dir=args.data_dir)
+    print(f"[ablation] Loaded {len(qa_pairs)} QA pairs")
+
+    run_all_ablations(
+        qa_pairs,
+        max_samples=args.max_samples,
+        configs=configs,
+        model=args.model,
+        workers=args.workers,
+        resume=args.resume,
+    )
