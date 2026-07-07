@@ -86,7 +86,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     "Qwen3-8B": ModelConfig(
         url=VLLM_8B_URL,
         model_name="Qwen3-8B",
-        max_len=25000,
+        max_len=20000,
     ),
     "Qwen3-32B": ModelConfig(
         url=VLLM_32B_URL,
