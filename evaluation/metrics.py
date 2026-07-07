@@ -2,14 +2,31 @@
 import re
 import string
 import time
+import unicodedata
 from collections import Counter
+
+_CN_PUNCTUATION = '。，、；：？！""''【】《》（）｛｝〔〕·…—～'
+_ALL_PUNCTUATION = set(string.punctuation) | set(_CN_PUNCTUATION)
 
 
 def _normalize(text: str) -> str:
-    """标准化文本用于评测比较"""
-    text = text.lower()
-    # 移除标点
-    text = "".join(ch for ch in text if ch not in string.punctuation)
+    """标准化文本用于评测比较，兼容中英文、全角字符、中文标点和数字。"""
+    result = []
+    for ch in str(text):
+        code = ord(ch)
+        if 0xFF01 <= code <= 0xFF5E:
+            result.append(chr(code - 0xFEE0))
+        elif ch == "\u3000":
+            result.append(" ")
+        elif unicodedata.category(ch).startswith("Zs"):
+            result.append(" ")
+        else:
+            result.append(ch)
+
+    text = "".join(result).lower()
+    text = "".join(ch for ch in text if ch not in _ALL_PUNCTUATION)
+    text = re.sub(r"(\d)([\u4e00-\u9fff])", r"\1 \2", text)
+    text = re.sub(r"([\u4e00-\u9fff])(\d)", r"\1 \2", text)
     # 移除冠词
     text = re.sub(r"\b(a|an|the)\b", " ", text)
     # 合并空白
