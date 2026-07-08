@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""从 ground truth hop 结构构建 oracle trajectory
+"""从 ground truth hop 结构构建 oracle trajectory，直接利用数据集，构造一条 “标准答案轨迹”。
 
 每条 QA 的 hops 已包含完整信息：
 - hop.question → 搜索 query
@@ -11,7 +11,8 @@
 
 用法：
   python scripts/build_oracle_traces.py
-  python scripts/build_oracle_traces.py --qa data/financial_eval/train_qa_pairs_zh.json --use-zh
+  python scripts/build_oracle_traces.py --qa data/financial_eval/train_qa_pairs_zh_clean.json
+  输出 traces_oracle_zh.jsonl
 """
 import argparse
 import json
@@ -20,6 +21,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# 控制每条证据 chunk 文本最多保留多少字符
 MAX_TEXT_LEN = 500
 
 
@@ -42,6 +44,9 @@ def build_oracle_trace(qa: dict, corpus_map: dict, use_zh: bool = False) -> dict
         step_id = hop["hop_idx"]
         sub_query = hop["question"]
         depends_on = [step_id - 1] if step_id > 1 else []
+        # 说明：关于 train_qa_pairs_zh_clean.json 里的两种工具字段
+        # search_tools 是单工具命中列表，当前 build_oracle_traces.py 和 SFT 主要用。
+        # search_tools_hybrid 是混合检索组合命中列表，用于 clean 数据可达性过滤和统计，SFT 不直接使用它。
         tools = hop.get("search_tools", [])
         if not tools:
             tools = ["keyword_search"]  # 第一跳默认
@@ -130,15 +135,15 @@ def main():
     parser.add_argument("--qa", default=None, help="QA 文件路径")
     parser.add_argument("--corpus", default=None, help="Corpus 文件路径")
     parser.add_argument("--output", default=None, help="输出路径")
-    parser.add_argument("--use-zh", action="store_true", help="使用翻译后的中文字段")
+    parser.add_argument("--use-zh", default=True, action="store_true", help="使用翻译后的中文字段")
     args = parser.parse_args()
 
     base_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                             "data", "financial_eval")
 
-    qa_path = args.qa or os.path.join(base_dir, "train_qa_pairs_zh.json" if args.use_zh else "train_qa_pairs.json")
+    qa_path = args.qa or os.path.join(base_dir, "train_qa_pairs_zh_clean.json" if args.use_zh else "train_qa_pairs.json")
     corpus_path = args.corpus or os.path.join(base_dir, "corpus.json")
-    output_path = args.output or os.path.join(base_dir, "traces_oracle.jsonl")
+    output_path = args.output or os.path.join(base_dir, "traces_oracle_zh.jsonl")
 
     # 加载数据
     with open(qa_path) as f:
