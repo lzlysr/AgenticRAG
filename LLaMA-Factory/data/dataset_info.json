@@ -14,7 +14,7 @@
     }
   },
   "financial_agent_zh_react": {
-    "file_name": "/share/project/kouqian/Codes/cv_agenticrag/core/data/financial_eval/sft_zh_llamafactory/lf_react.jsonl",
+    "file_name": "/data/lzl/workspace/AgenticRAG/data/financial_eval/sft_zh_llamafactory/lf_react_zh.jsonl",
     "formatting": "sharegpt",
     "columns": {
       "messages": "messages"
