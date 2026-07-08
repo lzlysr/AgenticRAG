@@ -7,6 +7,8 @@
 - hop.answer → 每步答案
 - final_answer → 最终答案
 
+❗但实际代码没有使用 hop["answer"]，但中间答案对 SFT 很有价值！
+
 输出格式兼容 trace_to_sft.py。
 
 用法：
@@ -43,13 +45,14 @@ def build_oracle_trace(qa: dict, corpus_map: dict, use_zh: bool = False) -> dict
     for hop in qa["hops"]:
         step_id = hop["hop_idx"]
         sub_query = hop["question"]
+        # ❗线性 depends_on 不适合所有 QA 类型！
         depends_on = [step_id - 1] if step_id > 1 else []
         # 说明：关于 train_qa_pairs_zh_clean.json 里的两种工具字段
         # search_tools 是单工具命中列表，当前 build_oracle_traces.py 和 SFT 主要用。
         # search_tools_hybrid 是混合检索组合命中列表，用于 clean 数据可达性过滤和统计，SFT 不直接使用它。
         tools = hop.get("search_tools", [])
         if not tools:
-            tools = ["keyword_search"]  # 第一跳默认
+            tools = ["keyword_search"]  # 第一跳默认 ❗可能让 SFT 数据工具分布偏向 BM25。
         tool = tools if len(tools) > 1 else tools[0]
 
         plan.append({
