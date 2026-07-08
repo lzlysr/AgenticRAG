@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""将收集的 Agent trace 转换为 ReAct 风格 SFT 格式
+"""将收集的 Agent trace 转换为 ReAct 风格 SFT 格式。把理想轨迹翻译成 LLM 能学习的 ReAct 对话格式
 
 ReAct 格式: think + tool_call + observation 循环 → <answer>
 
@@ -15,35 +15,6 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-SYSTEM_PROMPT_EN = (
-    "You are a financial document QA agent. You have access to the following tools:\n"
-    "- keyword_search(query): Search documents using keyword matching (BM25)\n"
-    "- semantic_search(query): Search documents using semantic similarity\n"
-    "- graph_search(query): Search related entities and documents via knowledge graph\n"
-    "- hybrid_search(query, tools): Search using multiple tools with RRF fusion and reranking\n"
-    "- read_chunk(chunk_id): Read a specific document chunk by ID\n\n"
-    "Answer the user's question by searching relevant documents. "
-    "Think step by step and use tools to gather evidence before answering."
-)
-
-SYSTEM_PROMPT_ZH = (
-    "你是一个金融文档问答 Agent。你可以使用以下工具：\n"
-    "- keyword_search(query): 使用关键词匹配（BM25）搜索文档\n"
-    "- semantic_search(query): 使用语义相似度搜索文档\n"
-    "- graph_search(query): 使用知识图谱搜索相关实体和文档\n"
-    "- hybrid_search(query, tools): 使用多个工具进行 RRF 融合检索并重排\n"
-    "- read_chunk(chunk_id): 通过 ID 读取特定文档片段\n\n"
-    "通过搜索相关文档来回答用户的问题。逐步思考并使用工具收集证据后再作答。"
-)
-
-
-def _get_system_prompt(lang=None):
-    if lang is None:
-        import config
-        lang = getattr(config, "PROMPT_LANG", "en")
-    return SYSTEM_PROMPT_ZH if lang == "zh" else SYSTEM_PROMPT_EN
-
 
 def _build_evidence_map(trace_data: dict) -> dict[int, dict]:
     """按 step_id 索引 evidence"""
@@ -71,8 +42,8 @@ def _format_observation(evidence_entry: dict, max_results: int = 3, max_text: in
 def _normalize_tool(tool_field):
     """将 tool 字段标准化为 (tool_name, arguments_dict)。
 
-    单工具: "keyword_search" → ("keyword_search", {"query": sub_query})
-    多工具: ["keyword_search", "semantic_search"] → ("hybrid_search", {"query": sub_query, "tools": [...]})
+    单工具: "keyword_search" → 返回: ("keyword_search", None)
+    多工具: ["keyword_search", "semantic_search"] → 返回: ("hybrid_search", ["keyword_search", "semantic_search"])
     """
     if isinstance(tool_field, list) and len(tool_field) > 1:
         return "hybrid_search", tool_field
@@ -158,8 +129,8 @@ def to_react(trace_data: dict, lang: str = None) -> dict | None:
 
 def main():
     parser = argparse.ArgumentParser(description="Trace → SFT ReAct 格式转换")
-    parser.add_argument("--input", required=True, help="traces jsonl 路径")
-    parser.add_argument("--output-dir", required=True, help="输出目录")
+    parser.add_argument("--input", default='data/financial_eval/traces_oracle_zh.jsonl', help="traces jsonl 路径")
+    parser.add_argument("--output-dir", default='data/financial_eval/sft/', help="输出目录")
     parser.add_argument("--max-iter", type=int, default=2, help="最大迭代数过滤 (默认 2)")
     parser.add_argument("--require-correct", action="store_true", default=True,
                         help="只保留 em=1 的 trace (默认 True)")
@@ -196,7 +167,7 @@ def main():
     print(f"[sft] 筛选后: {len(filtered)} 条 (em=1 & iter≤{args.max_iter} & evidence非空)")
 
     # 转换 ReAct 格式
-    out_path = os.path.join(args.output_dir, "sft_react.jsonl")
+    out_path = os.path.join(args.output_dir, "sft_react_zh.jsonl")
     count = 0
     with open(out_path, "w", encoding="utf-8") as f:
         for t in filtered:
