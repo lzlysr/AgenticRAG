@@ -1,0 +1,21 @@
+model_name_or_path: /data/lzl/workspace/AgenticRAG/models/Qwen3-4B
+adapter_name_or_path: /data/lzl/workspace/AgenticRAG/training/outputs/Qwen3-4B-sft-zh
+template: qwen3_nothink
+finetuning_type: lora
+export_dir: /data/lzl/workspace/AgenticRAG/models/Qwen3-4B-sft-zh
+export_size: 2
+export_device: cpu
+export_legacy_format: false
+trust_remote_code: true
+
+# adapter_name_or_path：SFT checkpoint 目录，来自 sft_zh_react.yaml 的 output_dir
+# export_dir：导出合并后的完整模型目录
+
+# 如果你只想导出某个 checkpoint，比如：
+# training/outputs/Qwen3-4B-sft-zh/checkpoint-90
+
+# 那就改export.yaml配置：
+# ```text
+# adapter_name_or_path: /data/lzl/workspace/AgenticRAG/training/outputs/Qwen3-4B-sft-zh/checkpoint-90
+# export_dir: /data/lzl/workspace/AgenticRAG/models/Qwen3-4B-sft-zh-ckpt90
+# ```
