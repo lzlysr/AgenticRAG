@@ -1,5 +1,5 @@
 ### model
-model_name_or_path: /share/project/common/models/models/Qwen/Qwen3-4B
+model_name_or_path: /data/lzl/workspace/AgenticRAG/models/Qwen3-4B
 trust_remote_code: true
 
 ### method
@@ -15,10 +15,10 @@ template: qwen3_nothink
 cutoff_len: 2048
 overwrite_cache: true
 preprocessing_num_workers: 16
-dataset_dir: ${LLAMA_FACTORY_DATA:-./data}
+dataset_dir: /data/lzl/workspace/AgenticRAG/LLaMA-Factory/data
 
 ### output
-output_dir: ${PROJECT_DIR}/training/outputs/qwen3-4b-sft-zh-react
+output_dir: /data/lzl/workspace/AgenticRAG/training/outputs/Qwen3-4B-sft-zh
 logging_steps: 5
 save_steps: 45
 plot_loss: true
