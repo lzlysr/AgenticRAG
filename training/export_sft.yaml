@@ -1,12 +1,12 @@
 model_name_or_path: /data/lzl/workspace/AgenticRAG/models/Qwen3-4B
-adapter_name_or_path: /data/lzl/workspace/AgenticRAG/training/outputs/Qwen3-4B-sft-zh
+adapter_name_or_path: /data/lzl/workspace/AgenticRAG/training/outputs/Qwen3-4B-sft-zh/checkpoint-90
 template: qwen3_nothink
 finetuning_type: lora
 export_dir: /data/lzl/workspace/AgenticRAG/models/Qwen3-4B-sft-zh
-export_size: 2
-export_device: cpu
+export_size: 2 # 单个权重文件大小（GB）
+export_device: cuda:3
 export_legacy_format: false
-trust_remote_code: true
+trust_remote_code: true # 允许执行模型仓库里的自定义代码
 
 # adapter_name_or_path：SFT checkpoint 目录，来自 sft_zh_react.yaml 的 output_dir
 # export_dir：导出合并后的完整模型目录

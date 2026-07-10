@@ -1,43 +1,43 @@
 ### model
 model_name_or_path: /data/lzl/workspace/AgenticRAG/models/Qwen3-4B
-trust_remote_code: true
+trust_remote_code: true # 允许执行模型仓库里的自定义代码
 
 ### method
 stage: sft
 do_train: true
 finetuning_type: lora
-lora_rank: 64
-lora_target: all
+lora_rank: 64 # LoRA 低秩矩阵的 rank。越大表达能力越强，但显存和参数更多。
+lora_target: all # 对尽可能多的线性层挂 LoRA。效果通常更强，成本也更高。
 
 ### dataset
 dataset: financial_agent_zh_react
-template: qwen3_nothink
-cutoff_len: 2048
-overwrite_cache: true
-preprocessing_num_workers: 16
-dataset_dir: /data/lzl/workspace/AgenticRAG/LLaMA-Factory/data
+template: qwen3_nothink # 在做的是工具调用 SFT，不是长思维链 SFT，所以用 qwen3_nothink 是合理的。
+cutoff_len: 2048 # 每条样本最大 token 长度。
+overwrite_cache: true # 是否覆盖缓存的处理结果
+preprocessing_num_workers: 16 # 数据预处理时的进程数
+dataset_dir: /data/lzl/workspace/AgenticRAG/LLaMA-Factory/data # LLaMA-Factory 找 dataset_info.json 的目录
 
 ### output
 output_dir: /data/lzl/workspace/AgenticRAG/training/outputs/Qwen3-4B-sft-zh
-logging_steps: 5
-save_steps: 45
+logging_steps: 5 # 每 5 step 打印一次训练日志。
+save_steps: 45 # 每 45 step 保存一个 checkpoint。刚好对应一个epoch。
 plot_loss: true
 overwrite_output_dir: true
-report_to: none
+report_to: none # 不上传 wandb/tensorboard 等平台。
 
 ### train
-per_device_train_batch_size: 2
-gradient_accumulation_steps: 8
+per_device_train_batch_size: 2 # 单卡 batch size
+gradient_accumulation_steps: 8 # 梯度累积 8 次再更新一次，等效 batch size 约等于 2 * 8 = 16，如果多卡还要乘卡数。
 learning_rate: 1.0e-4
 num_train_epochs: 3.0
 lr_scheduler_type: cosine
 warmup_ratio: 0.1
-bf16: false
-fp16: true
-ddp_timeout: 180000000
+bf16: false # BF16：牺牲精度，换范围。对于现在的大模型：训练和推理优先 BF16。
+fp16: true # FP16：牺牲范围，换精度
+ddp_timeout: 180000000 # 分布式训练超时时间，单卡时基本不用管。
 
 ### eval
-val_size: 0.1
+val_size: 0.1 # 从训练数据里切 10% 做验证集。
 per_device_eval_batch_size: 2
 eval_strategy: steps
-eval_steps: 45
+eval_steps: 45 # 刚好对应一个epoch。
