@@ -111,7 +111,7 @@ def main() -> None:
         description="统计 eval_agentic 结果文件中的工具类型分布。"
     )
     parser.add_argument(
-        "result_file",
+        "--result_file",
         default=os.path.join(RESULTS_DIR, "eval_agentic", "financial", "agentic_185_Qwen3-4B.json"),
         help="eval_agentic 生成的单个 JSON 结果文件。",
     )
