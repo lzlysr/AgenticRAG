@@ -24,7 +24,7 @@ WORKERS = 10
 
 
 def main():
-    result_file = sys.argv[1] if len(sys.argv) > 1 else "results/agentic_Qwen3-4B-GRPO-v5e.json"
+    result_file = sys.argv[1] if len(sys.argv) > 1 else "results/eval_agentic/financial/agentic_185_Qwen3-4B.json"
 
     with open(result_file) as f:
         data = json.load(f)
@@ -127,7 +127,8 @@ def main():
     if has_evidence:
         data["summary"]["judge_faithfulness"] = avg_jf
         data["summary"]["judge_context_precision"] = avg_jcp
-    out_path = result_file.replace(".json", "_judged.json")
+    out_path = result_file.replace(".json", "_judged.json").replace("eval_agentic", "run_agentic_judge")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     print(f"\n  Saved to {out_path}")
