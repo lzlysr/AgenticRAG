@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from evaluation.hop_aware_eval import compute_hop_recall, aggregate_diagnostics
 from evaluation.metrics import exact_match, f1_score
 from evaluation.ablation import load_financial_qa_pairs
-from llm.client import get_from_llm
+from llm.client import MODEL_CONFIGS
 from config import RESULTS_DIR, ACTIVE_DATA_DIR, ACTIVE_INDEX_DIR
 from retrieval.keyword_search import tokenize
 
@@ -238,11 +238,15 @@ def run_agentic_single(model: str, question: str,
         try:
             # 不能用 agent_chat_json()：这里需要保留原始 XML tool_call/answer 文本，
             # agent_chat_json() 会把回复当 JSON 解析，解析失败时还会丢掉原始工具调用轨迹。
-            content = get_from_llm(
-                messages,
-                model_name=model,
+            # 这里也不用 get_from_llm()，因为它会 strip <think>，从而改变下一轮上下文。
+            config = MODEL_CONFIGS[model]
+            resp = config.client.chat.completions.create(
+                model=config.model_name,
+                messages=messages,
+                temperature=config.temperature,
                 max_tokens=1024,
-            ) or ""
+            )
+            content = resp.choices[0].message.content or ""
         except Exception as e:
             full_trajectory += f"\n[ERROR] {e}"
             break
@@ -298,7 +302,7 @@ def run_agentic_single(model: str, question: str,
 
 def main():
     parser = argparse.ArgumentParser(description="Agentic evaluation")
-    parser.add_argument("--model", default='Qwen3-4B')
+    parser.add_argument("--model", default='Qwen3-4B-sft-zh')
     parser.add_argument("--max-samples", type=int, default=982) # 训练 797 + 测试 185
     # 单个问题最多允许模型进行多少轮 assistant 回复
     parser.add_argument("--max-turns", type=int, default=7)
