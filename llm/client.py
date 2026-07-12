@@ -108,9 +108,6 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         url=VLLM_BASE_URL,
         model_name="Qwen3-4B-sft-zh",
         max_len=20000,
-        # ReAct SFT learned to emit <think> + <tool_call>; disabling thinking
-        # makes Qwen3 often collapse directly to <answer> without tool calls.
-        think_bool=True,
     ),
 }
 
