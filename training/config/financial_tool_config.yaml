@@ -1,12 +1,14 @@
+# 工具注册表
+
 tools:
   - class_name: training.tools.financial_search_tool.KeywordSearchTool
-    config:
-      index_dir: ${PROJECT_DIR}/data/financial_all/indexes
+    config: 
+      index_dir: /data/lzl/workspace/AgenticRAG/data/financial_all/indexes
       top_k: 3
       max_text_len: 300
       retrieval_server_url: "http://localhost:8790"
       type: native
-    tool_schema:
+    tool_schema: # tool_schema 主要是给模型看的
       type: function
       function:
         name: keyword_search
@@ -22,7 +24,7 @@ tools:
 
   - class_name: training.tools.financial_search_tool.SemanticSearchTool
     config:
-      index_dir: ${PROJECT_DIR}/data/financial_all/indexes
+      index_dir: /data/lzl/workspace/AgenticRAG/data/financial_all/indexes
       top_k: 3
       max_text_len: 300
       retrieval_server_url: "http://localhost:8790"
@@ -43,7 +45,7 @@ tools:
 
   - class_name: training.tools.financial_search_tool.GraphSearchTool
     config:
-      index_dir: ${PROJECT_DIR}/data/financial_all/indexes
+      index_dir: /data/lzl/workspace/AgenticRAG/data/financial_all/indexes
       top_k: 3
       max_text_len: 300
       retrieval_server_url: "http://localhost:8790"
@@ -64,7 +66,7 @@ tools:
 
   - class_name: training.tools.financial_search_tool.HybridSearchTool
     config:
-      index_dir: ${PROJECT_DIR}/data/financial_all/indexes
+      index_dir: /data/lzl/workspace/AgenticRAG/data/financial_all/indexes
       top_k: 3
       max_text_len: 300
       retrieval_server_url: "http://localhost:8790"
@@ -84,7 +86,7 @@ tools:
               type: array
               items:
                 type: string
-              description: 要融合的工具列表，如 ["keyword_search", "semantic_search"]
+              description: 要融合的检索工具列表。列表必须包含2至3个互不重复的字符串；每个元素只能是 "keyword_search"、"semantic_search" 或 "graph_search"。例如 ["keyword_search", "semantic_search"]。
           required:
             - query
             - tools
