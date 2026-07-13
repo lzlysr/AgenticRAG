@@ -7,19 +7,33 @@
 - hybrid_search: 多工具 RRF 融合 + reranker（需 GPU）
 
 embedding/reranker 在指定 GPU 上运行，不占训练卡。
+
+q：为什么不用 retrieval/ 下面已有函数？主要是运行边界不同：
+
+retrieval/*.py
+  给普通 Python pipeline / eval / run_pipeline 用。
+
+training/tools/financial_search_tool.py
+  给 verl multi-turn tool calling 用，必须继承 verl.tools.base_tool.BaseTool
+
+GRPO 的 rollout 是 verl/Ray/vLLM 管理的多进程训练环境，不是你普通 Python 脚本里直接 import retrieval.semantic_search 的那条路径。所以这里单独写了 verl 兼容的工具类。
+
+而且，retrieval/ 只是在单进程内避免重复加载，不是跨 worker 共享模型，不能代替retrieval_server。
 """
+import asyncio
 import json
 import os
 import pickle
-import re
 import uuid
-from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from typing import Any, Optional
 
 import numpy as np
 
+from retrieval.graph_search import _bfs_collect_chunks
+from retrieval.hybrid_search import rrf_fuse
+from retrieval.keyword_search import tokenize
 from verl.tools.base_tool import BaseTool, ToolResponse
 
 # ── 共享单例（跨工具实例复用）──────────────────────────────────────
@@ -38,12 +52,15 @@ _shared = {
 
 def _call_embed(url: str, texts: list[str]) -> np.ndarray:
     """通过 HTTP 调用远程 embedding 服务"""
+    # urllib 是 Python 标准库自带的一组 URL/HTTP 工具，不需要额外安装。
     import urllib.request
+    # .encode() 转成字节数据，供 HTTP 请求发送
     data = json.dumps({"texts": texts}).encode()
     req = urllib.request.Request(f"{url}/embed", data=data,
                                 headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=30) as resp:
         result = json.loads(resp.read())
+    # 转成 float32 很重要，因为 FAISS 通常要求查询向量使用 float32
     return np.array(result["embeddings"], dtype=np.float32)
 
 
@@ -99,38 +116,6 @@ def _load_entity_embeddings(index_dir: str):
     return _shared["entity_data"]
 
 
-# ── 分词 ──────────────────────────────────────────────────────────
-
-def _tokenize(text: str) -> list[str]:
-    import jieba
-    tokens = []
-    parts = re.split(r'([\u4e00-\u9fff]+)', text.lower())
-    for part in parts:
-        if re.match(r'^[\u4e00-\u9fff]+$', part):
-            tokens.extend(jieba.lcut(part))
-        else:
-            tokens.extend(part.split())
-    return [t for t in tokens if t.strip()]
-
-
-# ── RRF 融合 ──────────────────────────────────────────────────────
-
-def _rrf_fuse(results_list: list[list[dict]], k: int = 60) -> list[dict]:
-    chunk_scores = {}
-    chunk_data = {}
-    for results in results_list:
-        for rank, r in enumerate(results):
-            cid = r.get("chunk_id", "")
-            if not cid:
-                continue
-            rrf_score = 1.0 / (k + rank + 1)
-            chunk_scores[cid] = chunk_scores.get(cid, 0) + rrf_score
-            if cid not in chunk_data:
-                chunk_data[cid] = r
-    sorted_ids = sorted(chunk_scores, key=lambda x: chunk_scores[x], reverse=True)
-    return [dict(chunk_data[cid], score=chunk_scores[cid]) for cid in sorted_ids]
-
-
 # ── 基类 ──────────────────────────────────────────────────────────
 
 class _BaseFinancialTool(BaseTool):
@@ -162,31 +147,49 @@ class _BaseFinancialTool(BaseTool):
         passages = [c["text"] for c in candidates[:15]]
         scores = _call_rerank(self.retrieval_server_url, query, passages)
         indexed = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)
+        # “返回顺序”是 Reranker 顺序，但字典中的 score 不是 Reranker score
         return [candidates[i] for i, _ in indexed[:top_k]]
 
     def _encode(self, texts: list[str]) -> np.ndarray:
         return _call_embed(self.retrieval_server_url, texts)
 
     async def create(self, instance_id: Optional[str] = None, **kwargs):
+        '''
+        每条 rollout 或工具 session 开始时创建实例
+
+        **kwargs：prepare_agentic_grpo_data.py 中的 "create_kwargs" 字段，但是没用到。
+
+        这不影响当前检索，因为总reward由外部 reward_agentic_rag.py 计算，工具自身的 calc_reward()固定返回0。但意味着parquet中为四个工具重复保存的这些字段目前没有实际作用。
+        '''
         if instance_id is None:
             instance_id = str(uuid.uuid4())
         self._instance_dict[instance_id] = {"results": []}
+        # 返回实例ID + 空的初始工具响应
         return instance_id, ToolResponse()
 
     async def execute(self, instance_id: str, parameters: dict[str, Any], **kwargs):
+        '''
+        **kwargs：verl调用时传入的{"agent_data": agent_data}，没有使用。
+        '''
         query = parameters.get("query", "")
-        results = self._search(query, parameters)
+        # 注意：客户端工具调用已经 asyncio 并发，但 retrieval_server.py 的 embedding和reranker各自有锁，因此同类模型请求会在服务端排队；本地BM25、FAISS和图遍历仍可并发执行。
+        results = await asyncio.to_thread(self._search, query, parameters)
         text = self._format_results(results)
         self._instance_dict[instance_id]["results"].append(text)
+        # ToolResponse(text=text) 把检索结果封装成标准工具响应，给模型看。
+        # 即时 reward 固定为 0.0，说明工具调用本身没有奖励。
         return ToolResponse(text=text), 0.0, {"num_results": len(results), "query": query}
 
     def _search(self, query: str, parameters: dict) -> list[dict]:
+        '''占位接口，具体实现由四个子类分别覆盖。'''
         raise NotImplementedError
 
     async def calc_reward(self, instance_id: str, **kwargs) -> float:
+        '''工具级最终奖励固定为 0。'''
         return 0.0
 
     async def release(self, instance_id: str, **kwargs):
+        '''rollout 结束后删除实例状态'''
         self._instance_dict.pop(instance_id, None)
 
 
@@ -198,7 +201,7 @@ class KeywordSearchTool(_BaseFinancialTool):
     def _search(self, query: str, parameters: dict) -> list[dict]:
         chunk_ids, chunk_store = _load_chunk_store(self.index_dir)
         bm25 = _load_bm25(self.index_dir)
-        tokens = _tokenize(query)
+        tokens = tokenize(query)
         if not tokens:
             return []
         scores = bm25.get_scores(tokens)
@@ -245,8 +248,7 @@ class GraphSearchTool(_BaseFinancialTool):
     """知识图谱 BFS 检索"""
 
     def _search(self, query: str, parameters: dict) -> list[dict]:
-        import networkx as nx
-        chunk_ids, chunk_store = _load_chunk_store(self.index_dir)
+        _, chunk_store = _load_chunk_store(self.index_dir)
         graph = _load_graph(self.index_dir)
         entity_data = _load_entity_embeddings(self.index_dir)
 
@@ -256,33 +258,13 @@ class GraphSearchTool(_BaseFinancialTool):
         q_vec = self._encode([query])
         scores = (embeddings @ q_vec.T).flatten()
         top_ent_indices = np.argsort(scores)[::-1][:5]
-        seed_entities = [entities[i] for i in top_ent_indices if scores[i] > 0.3]
+        seed_entities = [(entities[i], float(scores[i])) for i in top_ent_indices]
 
         if not seed_entities:
             return []
 
-        # BFS 收集 chunk
-        chunk_scores = {}
-        visited = set()
-        queue = deque()
-        for ent in seed_entities:
-            if ent in graph:
-                queue.append((ent, 0))
-                visited.add(ent)
-
-        while queue:
-            node, depth = queue.popleft()
-            if depth > 2:
-                continue
-            node_data = graph.nodes[node]
-            for cid in node_data.get("chunk_ids", []):
-                score = 1.0 / (1 + depth)
-                chunk_scores[cid] = max(chunk_scores.get(cid, 0), score)
-            if depth < 2:
-                for neighbor in graph.neighbors(node):
-                    if neighbor not in visited:
-                        visited.add(neighbor)
-                        queue.append((neighbor, depth + 1))
+        # 复用在线图检索的 BFS：同时收集节点 mentions、入边和出边 chunk。
+        chunk_scores = _bfs_collect_chunks(graph, seed_entities)
 
         # 按分数排序
         sorted_chunks = sorted(chunk_scores.items(), key=lambda x: x[1], reverse=True)
@@ -306,6 +288,12 @@ class HybridSearchTool(_BaseFinancialTool):
     def __init__(self, config: dict, tool_schema):
         super().__init__(config, tool_schema)
         # 子工具实例（共享 config）
+        # __new__()只创建对象，不调用__init__()
+        # 这里没有正常调用：KeywordSearchTool(config, schema)
+        # 而是使用 __new__() 创建一个未初始化对象，再复制当前 Hybrid 实例的属性。
+        # 这样做的目的是：
+        # 1. 不重复调用 BaseTool 初始化；
+        # 2. 让子工具共享 Hybrid 的 index_dir、top_k、URL 等配置；
         self._keyword = KeywordSearchTool.__new__(KeywordSearchTool)
         self._keyword.__dict__.update(self.__dict__)
         self._semantic = SemanticSearchTool.__new__(SemanticSearchTool)
@@ -334,16 +322,17 @@ class HybridSearchTool(_BaseFinancialTool):
             for t in tools:
                 sub = self._sub_tools.get(t)
                 if sub:
-                    futures.append(pool.submit(sub._search, query, {}))
-            for f in futures:
+                    futures.append((t, pool.submit(sub._search, query, {})))
+            for tool_name, future in futures:
                 try:
-                    results_list.append(f.result())
-                except Exception:
+                    results_list.append(future.result())
+                except Exception as exc:
+                    print(f"[hybrid_search] Tool {tool_name} failed: {exc}")
                     results_list.append([])
 
         if not results_list:
             return []
 
         # RRF 融合 + rerank
-        fused = _rrf_fuse(results_list)
+        fused = rrf_fuse(results_list)
         return self._rerank(query, fused)
