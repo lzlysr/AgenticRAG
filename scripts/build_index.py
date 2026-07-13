@@ -8,20 +8,20 @@ import numpy as np
 
 # 去两次上一层目录，导入项目根路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import DATA_DIR, INDEX_DIR
+from config import ACTIVE_DATA_DIR, ACTIVE_INDEX_DIR
 
 
 def build_all(corpus_path: str = None, index_dir: str = None):
     """从 corpus.json 构建所有索引
 
     Args:
-        corpus_path: corpus.json 路径，默认 DATA_DIR/corpus.json
-        index_dir: 索引输出目录，默认 INDEX_DIR
+        corpus_path: corpus.json 路径，默认 ACTIVE_DATA_DIR/corpus.json
+        index_dir: 索引输出目录，默认 ACTIVE_INDEX_DIR
     """
     if corpus_path is None:
-        corpus_path = os.path.join(DATA_DIR, "corpus.json")
+        corpus_path = os.path.join(ACTIVE_DATA_DIR, "corpus.json")
     if index_dir is None:
-        index_dir = INDEX_DIR
+        index_dir = ACTIVE_INDEX_DIR
 
     os.makedirs(index_dir, exist_ok=True)
 

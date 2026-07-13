@@ -17,7 +17,7 @@ import numpy as np
 from tqdm import tqdm
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 项目根目录
-from config import DATA_DIR, INDEX_DIR, SYNTH_LLM_MODEL
+from config import ACTIVE_DATA_DIR, ACTIVE_INDEX_DIR, SYNTH_LLM_MODEL
 
 # ── 全局计数 ──
 _lock = Lock()
@@ -252,11 +252,11 @@ def print_graph_stats(G: nx.MultiDiGraph):
 
 def main():
     parser = argparse.ArgumentParser(description="Build knowledge graph from corpus")
-    parser.add_argument("--corpus", default=os.path.join(DATA_DIR, "corpus.json"),
+    parser.add_argument("--corpus", default=os.path.join(ACTIVE_DATA_DIR, "corpus.json"),
                         help="Path to corpus.json")
-    parser.add_argument("--output-graph", default=os.path.join(INDEX_DIR, "knowledge_graph.json"),
+    parser.add_argument("--output-graph", default=os.path.join(ACTIVE_INDEX_DIR, "knowledge_graph.json"),
                         help="Output graph JSON path")
-    parser.add_argument("--output-embeddings", default=os.path.join(INDEX_DIR, "entity_embeddings.pkl"),
+    parser.add_argument("--output-embeddings", default=os.path.join(ACTIVE_INDEX_DIR, "entity_embeddings.pkl"),
                         help="Output entity embeddings path")
     parser.add_argument("--model", default=SYNTH_LLM_MODEL, help="LLM model for extraction")
     parser.add_argument("--workers", type=int, default=20, help="Parallel workers")
@@ -279,7 +279,7 @@ def main():
         print(f"Limited to {len(corpus)} chunks")
 
     # Step 1: 抽取三元组（支持缓存）
-    triples_cache = args.triples_cache or os.path.join(INDEX_DIR, "triples_cache.jsonl")
+    triples_cache = args.triples_cache or os.path.join(ACTIVE_INDEX_DIR, "triples_cache.jsonl")
 
     if os.path.exists(triples_cache):
         print(f"Loading cached triples from {triples_cache}")
