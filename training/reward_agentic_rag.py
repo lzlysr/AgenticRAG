@@ -15,6 +15,7 @@ verl 接口：compute_score(solution_str, ground_truth, **kwargs) -> float
 """
 import json
 import os
+from dotenv import load_dotenv
 import random
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -22,6 +23,8 @@ from concurrent.futures import ThreadPoolExecutor
 from evaluation.metrics import _normalize, exact_match, f1_score
 
 # ── LLM Judge API 配置（环境变量覆盖）──────────────────────────
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(PROJECT_DIR, ".env"), override=True)
 _JUDGE_BASE_URL = os.environ.get("JUDGE_BASE_URL", "http://localhost:8086/v1")
 _JUDGE_API_KEY = os.environ.get("JUDGE_API_KEY", "EMPTY")
 _JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "gpt-oss-120b")
@@ -37,7 +40,12 @@ def _get_judge_client():
     global _JUDGE_CLIENT
     if _JUDGE_CLIENT is None:
         from openai import OpenAI
-        _JUDGE_CLIENT = OpenAI(api_key=_JUDGE_API_KEY, base_url=_JUDGE_BASE_URL)
+        _JUDGE_CLIENT = OpenAI(
+            api_key=_JUDGE_API_KEY,
+            base_url=_JUDGE_BASE_URL,
+            timeout=30,
+            max_retries=0,
+        )
     return _JUDGE_CLIENT
 
 
@@ -47,8 +55,10 @@ def _call_judge(prompt: str, retries: int = 1) -> dict:
     而 llm.client 的 judge_chat_json() 使用模型注册表中的默认温度、max_len、top_p、thinking 配置。
     不能复用。
     '''
+    from openai import APIConnectionError, APIStatusError, APITimeoutError
+
     client = _get_judge_client()
-    for i in range(retries + 1):
+    for attempt in range(1, retries + 2):
         try:
             resp = client.chat.completions.create(
                 model=_JUDGE_MODEL,
@@ -66,8 +76,17 @@ def _call_judge(prompt: str, retries: int = 1) -> dict:
                 end = text.rfind('}')
                 if end > start:
                     return json.loads(text[start:end+1])
-        except Exception:
-            pass
+            raise ValueError(f"Judge response does not contain JSON: {text[:200]!r}")
+        except APITimeoutError as exc:
+            print(f"[reward_v9a] Judge timeout ({attempt}/{retries + 1}, 30s): {exc}")
+        except APIConnectionError as exc:
+            print(f"[reward_v9a] Judge connection error ({attempt}/{retries + 1}): {exc}")
+        except APIStatusError as exc:
+            print(f"[reward_v9a] Judge HTTP {exc.status_code} ({attempt}/{retries + 1}): {exc}")
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            print(f"[reward_v9a] Invalid Judge response ({attempt}/{retries + 1}): {exc}")
+        except Exception as exc:
+            print(f"[reward_v9a] Unexpected Judge error ({attempt}/{retries + 1}): {type(exc).__name__}: {exc}")
     return {}
 
 
@@ -131,12 +150,11 @@ def _judge_faithfulness(question: str, pred: str, evidence: str) -> float:
 
 
 def _extract_answer(text: str) -> str:
-    '''提取 <answer>，即最终答案'''
+    '''只提取完整的 <answer>...</answer>，避免把截断的工具轨迹当作答案。'''
     matches = list(re.finditer(r"<answer>(.*?)</answer>", text, re.DOTALL))
     if matches:
         return matches[-1].group(1).strip()
-    lines = [l.strip() for l in text.strip().split("\n") if l.strip()]
-    return lines[-1] if lines else ""
+    return ""
 
 
 def _extract_evidence(text: str) -> str:
