@@ -17,10 +17,9 @@ import json
 import os
 import random
 import re
-import string
-import unicodedata
-from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+
+from evaluation.metrics import _normalize, exact_match, f1_score
 
 # ── LLM Judge API 配置（环境变量覆盖）──────────────────────────
 _JUDGE_BASE_URL = os.environ.get("JUDGE_BASE_URL", "http://localhost:8086/v1")
@@ -31,6 +30,10 @@ _MAX_EVIDENCE_CHARS = 3000
 
 
 def _get_judge_client():
+    '''
+    llm.client 默认使用 JUDGE_LLM_MODEL，奖励脚本使用 JUDGE_MODEL，这是两个环境变量。
+    不能复用？
+    '''
     global _JUDGE_CLIENT
     if _JUDGE_CLIENT is None:
         from openai import OpenAI
@@ -39,6 +42,11 @@ def _get_judge_client():
 
 
 def _call_judge(prompt: str, retries: int = 1) -> dict:
+    '''
+    当前奖励固定 temperature=0、max_tokens=512。
+    而 llm.client 的 judge_chat_json() 使用模型注册表中的默认温度、max_len、top_p、thinking 配置。
+    不能复用。
+    '''
     client = _get_judge_client()
     for i in range(retries + 1):
         try:
@@ -62,83 +70,67 @@ def _call_judge(prompt: str, retries: int = 1) -> dict:
     return {}
 
 
-_CORRECTNESS_PROMPT = """Judge answer correctness.
-Question: {question}
-Predicted: {prediction}
-Gold: {gold}
-Score: 1.0=semantically equivalent, 0.7=mostly correct, 0.5=partially correct, 0.3=mostly wrong, 0.0=completely wrong.
-Reply JSON: {{"score": <float>}}"""
+_CORRECTNESS_PROMPT = """你是一个严格的评测法官。评估预测答案与标准答案相比的正确性。
 
-_FAITHFULNESS_PROMPT = """Judge if the answer is supported by evidence.
-Question: {question}
-Answer: {answer}
-Evidence: {evidence}
-Score: 1.0=fully supported, 0.7=mostly supported, 0.5=half supported, 0.3=barely supported, 0.0=not supported.
-Reply JSON: {{"score": <float>}}"""
+## 输入
+**问题：** {question}
+**预测答案：** {prediction}
+**标准答案：** {gold}
+
+## 评分标准
+- 1.0：预测答案与标准答案语义等价（措辞或格式可以不同）。
+- 0.7：预测答案抓住了要点，但有轻微不准确或多余细节。
+- 0.5：预测答案部分正确，包含一些正确信息，但也有重大错误或遗漏。
+- 0.3：预测答案与标准答案有少量重叠，但大部分是错误的。
+- 0.0：预测答案完全错误或与问题无关。
+
+只返回 JSON，不要输出解释：{{"score": <float>}}"""
+
+_FAITHFULNESS_PROMPT = """你是一个严格的评测法官。判断答案是否被证据支持。
+
+## 任务
+1. 识别答案中的关键论断。
+2. 逐项检查证据是否直接支持这些论断。
+3. 根据被支持的论断比例给出分数。
+
+## 输入
+**问题：** {question}
+**答案：** {answer}
+**证据（检索到的文档）：**
+{evidence}
+
+## 评分标准
+- 1.0：答案中的所有论断都被证据直接支持。
+- 0.7：大部分论断被支持，少量细节缺乏证据。
+- 0.5：约一半的论断被证据支持。
+- 0.3：仅少部分答案被证据支持。
+- 0.0：答案没有任何证据支持，或与证据直接矛盾。
+
+重要：只判断证据是否支持答案，不要判断答案本身是否正确。错误答案也可能忠实于证据。
+
+只返回 JSON，不要输出解释：{{"score": <float>}}"""
 
 
 def _judge_correctness(question: str, pred: str, gold: str) -> float:
+    '''与 llm_judge.py 的 judge_answer_correctness() 类似'''
     prompt = _CORRECTNESS_PROMPT.format(question=question, prediction=pred, gold=gold)
     result = _call_judge(prompt)
     return min(1.0, max(0.0, float(result.get("score", 0.0))))
 
 
 def _judge_faithfulness(question: str, pred: str, evidence: str) -> float:
+    '''与 llm_judge.py 的 judge_faithfulness() 类似'''
     evidence = evidence[:_MAX_EVIDENCE_CHARS]
     prompt = _FAITHFULNESS_PROMPT.format(question=question, answer=pred, evidence=evidence)
     result = _call_judge(prompt)
     return min(1.0, max(0.0, float(result.get("score", 0.0))))
 
 
-# ── 中文 normalize + 工具函数 ──────────────────────────────────
-
-_CN_PUNCTUATION = '。，、；：？！""''【】《》（）｛｝〔〕·…—～'
-_ALL_PUNCTUATION = set(string.punctuation) | set(_CN_PUNCTUATION)
-
-
-def _normalize(text: str) -> str:
-    result = []
-    for ch in text:
-        code = ord(ch)
-        if 0xFF01 <= code <= 0xFF5E:
-            result.append(chr(code - 0xFEE0))
-        elif ch == '\u3000':
-            result.append(' ')
-        elif unicodedata.category(ch).startswith('Zs'):
-            result.append(' ')
-        else:
-            result.append(ch)
-    text = ''.join(result).lower()
-    text = ''.join(ch for ch in text if ch not in _ALL_PUNCTUATION)
-    text = re.sub(r'(\d)([\u4e00-\u9fff])', r'\1 \2', text)
-    text = re.sub(r'([\u4e00-\u9fff])(\d)', r'\1 \2', text)
-    text = re.sub(r"\b(a|an|the)\b", " ", text)
-    text = " ".join(text.split())
-    return text
-
-
-def _token_f1(prediction: str, gold: str) -> float:
-    pred_tokens = _normalize(prediction).split()
-    gold_tokens = _normalize(gold).split()
-    if not gold_tokens:
-        return 1.0 if not pred_tokens else 0.0
-    if not pred_tokens:
-        return 0.0
-    common = Counter(pred_tokens) & Counter(gold_tokens)
-    num_common = sum(common.values())
-    if num_common == 0:
-        return 0.0
-    precision = num_common / len(pred_tokens)
-    recall = num_common / len(gold_tokens)
-    return 2 * precision * recall / (precision + recall)
-
-
-def _best_f1(pred: str, gold: str, aliases: list[str]) -> float:
-    candidates = [gold] + aliases
-    return max(_token_f1(pred, c) for c in candidates if c)
+# ── 工具函数 ───────────────────────────────────────────────────
 
 
 def _extract_answer(text: str) -> str:
+    '''提取 <answer>，即最终答案'''
     matches = list(re.finditer(r"<answer>(.*?)</answer>", text, re.DOTALL))
     if matches:
         return matches[-1].group(1).strip()
@@ -147,24 +139,29 @@ def _extract_answer(text: str) -> str:
 
 
 def _extract_evidence(text: str) -> str:
-    matches = re.findall(r'เพิ่มเติม(.*?)', text, re.DOTALL)
+    '''提取 <tool_response>，即检索到的工具返回的内容。'''
+    matches = re.findall(r"<tool_response>\s*(.*?)\s*</tool_response>", text, re.DOTALL)
     return "\n".join(m.strip() for m in matches if m.strip())
 
 
 def _extract_retrieved_chunks(text: str) -> set:
+    '''提取金融数据的 chunk_id'''
     return set(re.findall(r'\[([a-z]+_\d+)\]', text))
 
 
 def _check_tool_call_format(text: str) -> bool:
+    '''检查是否存在 <tool_call> 格式的工具调用。'''
     pattern = r'<tool_call>\s*\{[^}]*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:'
     return bool(re.search(pattern, text))
 
 
 def _count_tool_calls(text: str) -> int:
+    '''根据 <tool_call> 的次数统计工具调用次数'''
     return len(re.findall(r'<tool_call>', text))
 
 
 def _grounded_answer_score(pred: str, evidence: str) -> float:
+    '''衡量答案是否被证据覆盖（关键词级别）。'''
     if not pred or not evidence:
         return 0.0
     pred_tokens = set(_normalize(pred).split())
@@ -177,7 +174,10 @@ def _grounded_answer_score(pred: str, evidence: str) -> float:
 
 
 def _hop_precision_recall(retrieved_chunks: set, gold_chunks: list) -> float:
-    """Precision-aware hop matching (F1)"""
+    """
+    Precision-aware hop matching (F1)。比较检索到的 chunk ID 与标准答案中的 chunk ID。
+    使用 _hop_precision_recall 可作为 llm_judge.py 中的 Context Precision 的确定性替代指标。
+    """
     if not gold_chunks:
         return 0.0
     gold_set = set(str(c) for c in gold_chunks)
@@ -199,6 +199,8 @@ _thread_pool = ThreadPoolExecutor(max_workers=2)
 def compute_score(solution_str, ground_truth, **kwargs):
     """verl 奖励函数 v9a（Stage 3: 检索质量优先）
 
+    这是 verl 调用的统一入口。
+
     score = hop_pr*0.30 + faith*0.25 + corr*0.25 + grounded*0.10 + format*0.10 - insufficient_search
     """
     if isinstance(ground_truth, dict):
@@ -214,16 +216,13 @@ def compute_score(solution_str, ground_truth, **kwargs):
         gold_chunks = []
         hop_count = 2
 
+    # 数据从 Parquet/Pandas 进入 verl 后，可能不是普通列表。因此需要转换为 list。
     if hasattr(gold_chunks, 'tolist'):
         gold_chunks = gold_chunks.tolist()
     if hasattr(aliases, 'tolist'):
         aliases = aliases.tolist()
 
     pred = _extract_answer(solution_str)
-
-    # </think> 重复惩罚
-    if solution_str.count("</think>") > 5:
-        return 0.0
 
     # ── 格式奖励（0.10）──
     has_answer_tag = "<answer>" in solution_str and "</answer>" in solution_str
@@ -244,7 +243,7 @@ def compute_score(solution_str, ground_truth, **kwargs):
     else:
         hop_score = -0.05
 
-    # ── 搜索不足惩罚 ──
+    # ── 搜索不足惩罚 ── (没有过度搜索的惩罚？）
     insufficient_penalty = 0.0
     if hop_count > 0 and num_tool_calls < hop_count:
         insufficient_penalty = 0.05
@@ -255,18 +254,23 @@ def compute_score(solution_str, ground_truth, **kwargs):
     grounded_score = grounded * 0.10
 
     # ── 无答案 → 只给格式分 + hop ──
+    # 属于过程奖励，能鼓励模型先学会检索。
     if not pred:
         score = format_bonus + hop_score - insufficient_penalty
+        # 随机打印无答案日志。既能观察训练情况，又不会刷屏。
         if random.randint(1, 16) == 1:
-            print(f"[reward_v9a] NO_PRED hop_pr={hop_pr:.2f} fmt={format_bonus:.2f}")
+            print(f"[reward_v9a] NO_PRED hop_pr={hop_score:.2f} fmt={format_bonus:.2f}")
         return max(0.0, score)
 
     # ── Correctness（0.25）+ Faithfulness（0.25）──
-    f1 = _best_f1(pred, gold, aliases)
-    em = 1.0 if _normalize(pred) == _normalize(gold) else 0.0
+    aliases = [alias for alias in aliases if alias]
+    f1 = f1_score(pred, gold, aliases=aliases)
+    em = exact_match(pred, gold, aliases=aliases)
 
+    # 如果 em 和 f1 较高，直接认为 correctness 满分，不再调用 Correctness Judge。
     if em == 1.0 or f1 >= 0.8:
         corr_score = 1.0
+        # 即使答案规则匹配正确，仍要检查是否有 evidence 支持。
         if evidence:
             faith_score = _judge_faithfulness(question, pred, evidence)
         else:
