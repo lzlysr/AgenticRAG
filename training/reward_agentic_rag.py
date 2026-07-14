@@ -55,6 +55,7 @@ def _call_judge(prompt: str, retries: int = 1) -> dict:
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,
                 max_tokens=512,
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             )
             text = resp.choices[0].message.content or ""
             m = re.search(r'```(?:json)?\s*\n?(.*?)```', text, re.DOTALL)
