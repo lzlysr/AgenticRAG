@@ -10,5 +10,5 @@ results/
 tmp/
 *.log
 nohup.out
-models/
+/models/
 /test.ipynb
