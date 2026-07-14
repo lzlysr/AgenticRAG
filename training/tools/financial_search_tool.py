@@ -155,6 +155,8 @@ class _BaseFinancialTool(BaseTool):
 
     async def create(self, instance_id: Optional[str] = None, **kwargs):
         '''
+        verl要求工具对象能调用 create/execute/release，但子类不必全部重写；无状态工具通常只需重写 execute，有状态工具则应完整实现三者。
+
         每条 rollout 或工具 session 开始时创建实例
 
         **kwargs：prepare_agentic_grpo_data.py 中的 "create_kwargs" 字段，但是没用到。
@@ -169,6 +171,8 @@ class _BaseFinancialTool(BaseTool):
 
     async def execute(self, instance_id: str, parameters: dict[str, Any], **kwargs):
         '''
+        verl要求工具对象能调用 create/execute/release，但子类不必全部重写；无状态工具通常只需重写 execute，有状态工具则应完整实现三者。
+        
         **kwargs：verl调用时传入的{"agent_data": agent_data}，没有使用。
         '''
         query = parameters.get("query", "")
@@ -189,7 +193,11 @@ class _BaseFinancialTool(BaseTool):
         return 0.0
 
     async def release(self, instance_id: str, **kwargs):
-        '''rollout 结束后删除实例状态'''
+        '''
+        verl要求工具对象能调用 create/execute/release，但子类不必全部重写；无状态工具通常只需重写 execute，有状态工具则应完整实现三者。
+
+        rollout 结束后删除实例状态
+        '''
         self._instance_dict.pop(instance_id, None)
 
 
