@@ -18,7 +18,7 @@ sleep 1
 
 # 使用 nohup 后，即使终端关闭，服务仍能继续运行。最后的 & 表示后台运行。
 echo "Starting retrieval server on GPU 0..."
-CUDA_VISIBLE_DEVICES=0 nohup ${PYTHON} \
+CUDA_VISIBLE_DEVICES=1 nohup ${PYTHON} \
   ${SCRIPT_DIR}/training/tools/retrieval_server.py \
   --port 8790 --device cuda:0 \
   > ${LOG} 2>&1 &
