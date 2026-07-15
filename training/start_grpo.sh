@@ -12,7 +12,10 @@
 #
 # 用法: bash training/start_grpo.sh
 set -euo pipefail
-set -x
+# DEBUG_GRPO 默认是 0，表示不打印每条命令；如果设置为 1，则打印每条命令。
+if [[ "${DEBUG_GRPO:-0}" == "1" ]]; then
+    set -x
+fi
 
 PROJECT_DIR=${PROJECT_DIR:-$(cd "$(dirname "$0")/.." && pwd)} # 自动计算根目录
 VERL_DIR=${PROJECT_DIR}/verl # 指向verl安装目录
@@ -40,17 +43,20 @@ cleanup_gpu() {
 cleanup_gpu || exit 1
 
 # Stage 3 base = v14e step30 merged
+MODEL_NAME=${MODEL_NAME:-Qwen3-4B-grpo-zh}
 MODEL_PATH=${PROJECT_DIR}/models/Qwen3-4B-sft-zh
 DATA_DIR=${PROJECT_DIR}/data/financial_eval
 REWARD_FN=${PROJECT_DIR}/training/reward_agentic_rag.py
 TOOL_CONFIG=${PROJECT_DIR}/training/config/financial_tool_config.yaml
-OUTPUT_DIR=${PROJECT_DIR}/training/outputs/Qwen3-4B-grpo-zh
-LOG=${PROJECT_DIR}/logs/Qwen3-4B-grpo-zh.log
+OUTPUT_DIR=${PROJECT_DIR}/training/outputs/${MODEL_NAME}
+LOG=${PROJECT_DIR}/logs/${MODEL_NAME}.log
+RUN_LOG=${OUTPUT_DIR}/main_ppo.log
 
 mkdir -p ${PROJECT_DIR}/logs
 
 # 清理旧输出
 rm -rf ${OUTPUT_DIR}
+mkdir -p ${OUTPUT_DIR}
 
 export PATH=${VERL_PYTHON_DIR:-$(dirname $(which python))}:$PATH # python环境设置
 export ATTN_BACKEND=flash_attn # 没用，因为 verl 的 FSDP 模型加载默认值已经是"flash_attention_2"
@@ -59,6 +65,7 @@ export CUDA_VISIBLE_DEVICES=0,3
 
 cd $VERL_DIR
 
+set +e
 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
     data.train_files=${DATA_DIR}/grpo_agentic_train.parquet \
@@ -66,6 +73,7 @@ python3 -m verl.trainer.main_ppo \
     data.train_batch_size=32 \
     data.max_prompt_length=1024 \
     data.max_response_length=4096 \
+    data.dataloader_num_workers=0 \
     data.filter_overlong_prompts=True \
     data.truncation=error \
     data.return_raw_chat=True \
@@ -83,13 +91,18 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.kl_loss_coef=0.05 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
     actor_rollout_ref.actor.entropy_coeff=0 \
-    actor_rollout_ref.actor.fsdp_config.param_offload=False \
-    actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
+    actor_rollout_ref.actor.fsdp_config.model_dtype=bf16 \
+    actor_rollout_ref.actor.fsdp_config.param_offload=True \
+    actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.agent.default_agent_loop=tool_agent \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.35 \
-    actor_rollout_ref.rollout.max_model_len=8192 \
+    actor_rollout_ref.rollout.load_format=safetensors \
+    actor_rollout_ref.rollout.layered_summon=True \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.5 \
+    actor_rollout_ref.rollout.max_model_len=5120 \
+    actor_rollout_ref.rollout.max_num_seqs=16 \
+    actor_rollout_ref.rollout.enforce_eager=True \
     actor_rollout_ref.rollout.multi_turn.enable=True \
     actor_rollout_ref.rollout.multi_turn.max_assistant_turns=7 \
     actor_rollout_ref.rollout.multi_turn.tool_config_path=${TOOL_CONFIG} \
@@ -105,14 +118,22 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console"]' \
     trainer.project_name=AGENTICRAG \
-    trainer.experiment_name=Qwen3-4B-grpo-zh \
+    trainer.experiment_name=${MODEL_NAME} \
     trainer.n_gpus_per_node=2 \
     trainer.nnodes=1 \
     trainer.save_freq=5 \
     trainer.test_freq=3 \
     trainer.total_epochs=2 \
     trainer.default_local_dir=${OUTPUT_DIR} \
-    2>&1 | tee ${LOG}
+    2>&1 | tee ${LOG} ${RUN_LOG} | python ${PROJECT_DIR}/scripts/filter_grpo_console.py
+train_status=${PIPESTATUS[0]}
+set -e
+
+python ${PROJECT_DIR}/scripts/plot_grpo_log.py \
+    --log ${LOG} \
+    --out-dir ${OUTPUT_DIR} || true
+
+exit ${train_status}
 
 # ── main_ppo 参数说明 ───────────────────────────────────────────
 # python3 -m verl.trainer.main_ppo
@@ -135,6 +156,9 @@ python3 -m verl.trainer.main_ppo \
 #   输入 prompt 的最大 token 数。
 # data.max_response_length=4096
 #   一条 rollout 的总响应预算；assistant 输出和工具 observation 都会占用该预算。
+# data.dataloader_num_workers=0
+#   不额外启动 PyTorch DataLoader 子进程。金融 GRPO 数据很小，瓶颈在 rollout/update；
+#   设为 0 可减少训练结束时 DataLoader worker 被 Ray 清理杀掉的尾部噪声。
 # data.filter_overlong_prompts=True
 #   训练前过滤 token 数超过 max_prompt_length 的 prompt。
 # data.truncation=error
@@ -182,10 +206,12 @@ python3 -m verl.trainer.main_ppo \
 #   使用低方差的 k3 KL 估计器计算 token 级 KL loss。
 # actor_rollout_ref.actor.entropy_coeff=0
 #   不额外加入熵奖励；探索主要来自 rollout 采样。
-# actor_rollout_ref.actor.fsdp_config.param_offload=False
-#   Actor 参数不卸载到 CPU，保持在 GPU 上以提高训练速度。
-# actor_rollout_ref.actor.fsdp_config.optimizer_offload=False
-#   优化器状态也不卸载到 CPU，速度更快但占用更多 GPU 显存。
+# actor_rollout_ref.actor.fsdp_config.model_dtype=bf16
+#   Actor FSDP 按 bf16 加载模型权重，避免默认 fp32 让 4B 模型常驻显存翻倍。
+# actor_rollout_ref.actor.fsdp_config.param_offload=True
+#   Actor 参数允许卸载到 CPU，降低与 vLLM rollout 共卡时的显存峰值。
+# actor_rollout_ref.actor.fsdp_config.optimizer_offload=True
+#   优化器状态允许卸载到 CPU，进一步降低训练阶段显存压力。
 #
 # vLLM Rollout 和工具调用：
 # actor_rollout_ref.rollout.name=vllm
@@ -195,10 +221,18 @@ python3 -m verl.trainer.main_ppo \
 #   否则模型不会触发多轮 tool calling
 # actor_rollout_ref.rollout.tensor_model_parallel_size=1
 #   一个 rollout 模型实例不做跨 GPU 张量并行，每个实例使用 1 张 GPU。
-# actor_rollout_ref.rollout.gpu_memory_utilization=0.35
-#   vLLM 引擎用于模型执行和 KV cache 的目标显存比例为 35%。
-# actor_rollout_ref.rollout.max_model_len=8192
-#   vLLM 单条序列的最大上下文长度，需覆盖 max_prompt_length + max_response_length。
+# actor_rollout_ref.rollout.load_format=safetensors
+#   让 vLLM 直接从模型目录预加载 base model，避免 hybrid engine 首轮再同步完整 base 权重。
+# actor_rollout_ref.rollout.layered_summon=True
+#   LoRA 同步时分层收集 adapter 参数，降低 FSDP state_dict 的瞬时显存峰值。
+# actor_rollout_ref.rollout.gpu_memory_utilization=0.5
+#   vLLM 引擎用于模型执行和 KV cache 的目标显存比例为 50%。该值需要给 FSDP 权重同步留出余量。
+# actor_rollout_ref.rollout.max_model_len=5120
+#   vLLM 单条序列的最大上下文长度，等于 max_prompt_length + max_response_length。
+# actor_rollout_ref.rollout.max_num_seqs=16
+#   vLLM 单个引擎允许的最大并发序列数；默认 1024 会在 sampler warmup 阶段制造过大的 dummy batch。
+# actor_rollout_ref.rollout.enforce_eager=True
+#   禁用 vLLM CUDA graph capture，降低和 FSDP 权重同步共卡时的显存峰值，代价是 rollout 速度变慢。
 # actor_rollout_ref.rollout.multi_turn.enable=True
 #   开启 assistant -> tool -> assistant 的多轮交互。
 # actor_rollout_ref.rollout.multi_turn.max_assistant_turns=7
