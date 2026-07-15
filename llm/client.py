@@ -51,7 +51,7 @@ class ModelConfig:
     model_name: str                    # 实际传给 API 的模型名
     api_key: str = "EMPTY"             # API Key（本地 vLLM 用 "EMPTY"）
     max_len: int = 32768
-    temperature: float = 0.2
+    temperature: float = 0.7
     top_p: float = 0.8
     top_k: int = 20
     min_p: int = 0
@@ -107,6 +107,11 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     "Qwen3-4B-sft-zh": ModelConfig(
         url=VLLM_BASE_URL,
         model_name="Qwen3-4B-sft-zh",
+        max_len=20000,
+    ),
+    "Qwen3-4B-grpo-zh": ModelConfig(
+        url=VLLM_BASE_URL,
+        model_name="Qwen3-4B-grpo-zh",
         max_len=20000,
     ),
 }
