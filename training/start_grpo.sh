@@ -43,7 +43,7 @@ cleanup_gpu() {
 cleanup_gpu || exit 1
 
 # Stage 3 base = v14e step30 merged
-MODEL_NAME=${MODEL_NAME:-Qwen3-4B-grpo-zh}
+MODEL_NAME=${MODEL_NAME:-Qwen3-4B-grpo-zh-v2}
 MODEL_PATH=${PROJECT_DIR}/models/Qwen3-4B-sft-zh
 DATA_DIR=${PROJECT_DIR}/data/financial_eval
 REWARD_FN=${PROJECT_DIR}/training/reward_agentic_rag.py
@@ -72,7 +72,7 @@ python3 -m verl.trainer.main_ppo \
     data.val_files=${DATA_DIR}/grpo_agentic_val.parquet \
     data.train_batch_size=32 \
     data.max_prompt_length=1024 \
-    data.max_response_length=4096 \
+    data.max_response_length=7168 \
     data.dataloader_num_workers=0 \
     data.filter_overlong_prompts=True \
     data.truncation=error \
@@ -99,15 +99,15 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.load_format=safetensors \
     actor_rollout_ref.rollout.layered_summon=True \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.5 \
-    actor_rollout_ref.rollout.max_model_len=5120 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
+    actor_rollout_ref.rollout.max_model_len=8192 \
     actor_rollout_ref.rollout.max_num_seqs=16 \
     actor_rollout_ref.rollout.enforce_eager=True \
     actor_rollout_ref.rollout.multi_turn.enable=True \
     actor_rollout_ref.rollout.multi_turn.max_assistant_turns=7 \
     actor_rollout_ref.rollout.multi_turn.tool_config_path=${TOOL_CONFIG} \
     actor_rollout_ref.rollout.multi_turn.format=hermes \
-    actor_rollout_ref.rollout.multi_turn.max_tool_response_length=1024 \
+    actor_rollout_ref.rollout.multi_turn.max_tool_response_length=1536 \
     actor_rollout_ref.rollout.n=4 \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=2 \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=2 \
@@ -153,9 +153,10 @@ exit ${train_status}
 # data.train_batch_size=32
 #   每个训练 batch 取 32 个问题；rollout.n=4 时最多生成 32x4=128 条候选轨迹。
 # data.max_prompt_length=1024
-#   输入 prompt 的最大 token 数。
-# data.max_response_length=4096
+#   输入 prompt 的最大 token 数。prompt max 约 662
+# data.max_response_length=7168
 #   一条 rollout 的总响应预算；assistant 输出和工具 observation 都会占用该预算。
+#   max_text_len=500 时，单次 top-3 工具回包最坏大约是 1461 tokens，4 次大概就 5844 tokens，#   再加 assistant 文本。
 # data.dataloader_num_workers=0
 #   不额外启动 PyTorch DataLoader 子进程。金融 GRPO 数据很小，瓶颈在 rollout/update；
 #   设为 0 可减少训练结束时 DataLoader worker 被 Ray 清理杀掉的尾部噪声。
@@ -225,10 +226,10 @@ exit ${train_status}
 #   让 vLLM 直接从模型目录预加载 base model，避免 hybrid engine 首轮再同步完整 base 权重。
 # actor_rollout_ref.rollout.layered_summon=True
 #   LoRA 同步时分层收集 adapter 参数，降低 FSDP state_dict 的瞬时显存峰值。
-# actor_rollout_ref.rollout.gpu_memory_utilization=0.5
+# actor_rollout_ref.rollout.gpu_memory_utilization=0.6
 #   vLLM 引擎用于模型执行和 KV cache 的目标显存比例为 50%。该值需要给 FSDP 权重同步留出余量。
-# actor_rollout_ref.rollout.max_model_len=5120
-#   vLLM 单条序列的最大上下文长度，等于 max_prompt_length + max_response_length。
+# actor_rollout_ref.rollout.max_model_len=8192
+#   vLLM 单条序列的最大上下文长度，应覆盖 prompt + response，并保留工具 schema/多轮边界余量。
 # actor_rollout_ref.rollout.max_num_seqs=16
 #   vLLM 单个引擎允许的最大并发序列数；默认 1024 会在 sampler warmup 阶段制造过大的 dummy batch。
 # actor_rollout_ref.rollout.enforce_eager=True
@@ -241,8 +242,9 @@ exit ${train_status}
 #   指定四种金融检索工具的 schema、实现类、索引路径和 retrieval server 地址。
 # actor_rollout_ref.rollout.multi_turn.format=hermes
 #   按 Hermes 工具调用协议解析模型生成的 tool call，并把工具结果追加回消息历史。
-# actor_rollout_ref.rollout.multi_turn.max_tool_response_length=1024
-#   单次工具响应最多保留 1024 个字符；超出后按 verl 的截断策略裁剪。
+# actor_rollout_ref.rollout.multi_turn.max_tool_response_length=1536
+#   单次工具 observation 最多保留 1536 个 token；超出后按 verl 的截断策略裁剪。因为单个文本
+#   chunk是500字符，检索最多3个，所以最多1500。
 # actor_rollout_ref.rollout.n=4
 #   每个问题采样 4 条候选轨迹，作为 GRPO 组内奖励比较的样本组。
 # actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=2

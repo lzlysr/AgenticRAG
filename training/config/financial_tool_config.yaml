@@ -5,7 +5,7 @@ tools:
     config: 
       index_dir: /data/lzl/workspace/AgenticRAG/data/financial_all/indexes
       top_k: 3
-      max_text_len: 300
+      max_text_len: 500
       retrieval_server_url: "http://localhost:8790"
       type: native
     tool_schema: # tool_schema 主要是给模型看的
@@ -26,7 +26,7 @@ tools:
     config:
       index_dir: /data/lzl/workspace/AgenticRAG/data/financial_all/indexes
       top_k: 3
-      max_text_len: 300
+      max_text_len: 500
       retrieval_server_url: "http://localhost:8790"
       type: native
     tool_schema:
@@ -47,7 +47,7 @@ tools:
     config:
       index_dir: /data/lzl/workspace/AgenticRAG/data/financial_all/indexes
       top_k: 3
-      max_text_len: 300
+      max_text_len: 500
       retrieval_server_url: "http://localhost:8790"
       type: native
     tool_schema:
@@ -68,7 +68,7 @@ tools:
     config:
       index_dir: /data/lzl/workspace/AgenticRAG/data/financial_all/indexes
       top_k: 3
-      max_text_len: 300
+      max_text_len: 500
       retrieval_server_url: "http://localhost:8790"
       type: native
     tool_schema:

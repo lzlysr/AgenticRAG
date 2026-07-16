@@ -29,7 +29,7 @@ _JUDGE_BASE_URL = os.environ.get("JUDGE_BASE_URL", "http://localhost:8086/v1")
 _JUDGE_API_KEY = os.environ.get("JUDGE_API_KEY", "EMPTY")
 _JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "gpt-oss-120b")
 _JUDGE_CLIENT = None
-_MAX_EVIDENCE_CHARS = 3000
+_MAX_EVIDENCE_CHARS = 6000 # 与SFT的裁剪对齐
 
 
 def _get_judge_client():

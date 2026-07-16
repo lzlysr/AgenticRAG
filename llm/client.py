@@ -114,6 +114,11 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         model_name="Qwen3-4B-grpo-zh",
         max_len=20000,
     ),
+    "Qwen3-4B-grpo-zh-v2": ModelConfig(
+        url=VLLM_BASE_URL,
+        model_name="Qwen3-4B-grpo-zh-v2",
+        max_len=20000,
+    ),
 }
 
 
