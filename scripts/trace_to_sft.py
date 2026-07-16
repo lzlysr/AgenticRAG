@@ -103,6 +103,7 @@ def to_react(trace_data: dict, lang: str = None) -> dict | None:
             think = f"Now I need to find: {sub_query}"
 
         tool_args = _make_tool_args(tool_name, sub_query, tool_list)
+        # ❗必须与 grpo 中的 hermes 格式对齐：{"name": ..., "arguments": {...}}
         tool_call_json = json.dumps({"name": tool_name, "arguments": tool_args}, ensure_ascii=False)
 
         messages.append({
@@ -119,6 +120,7 @@ def to_react(trace_data: dict, lang: str = None) -> dict | None:
         })
 
     # Final answer
+    # ❗必须用 <answer> 标签包裹答案，否则 SFT 最后一轮 assistant 直接输出裸文本。
     messages.append({
         "role": "assistant",
         "content": f"<answer>{trace_data['pred']}</answer>",

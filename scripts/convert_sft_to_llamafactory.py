@@ -39,6 +39,7 @@ def convert_react(input_path: str, output_path: str):
                 continue
             
             # 把 messages + tools schema 渲染成 Qwen3 官方聊天格式 得到的text是str
+            # 把工具 schema（原始的 tools 字段） 注入到 system 里，变成 Qwen3 真正吃到的文本
             # 用 tokenizer 生成完整文本（含 # Tools 和 <tool_response> 格式）
             # 保证：训练阶段 SFT tokenizer 和 推理阶段 Qwen3 chat template 一致
             text = tok.apply_chat_template(
