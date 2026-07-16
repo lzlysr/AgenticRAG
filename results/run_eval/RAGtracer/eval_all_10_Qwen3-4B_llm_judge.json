@@ -1,0 +1,286 @@
+{
+  "summary": {
+    "num_samples": 10,
+    "avg_em": 0.1,
+    "avg_f1": 0.322,
+    "cost": {
+      "num_queries": 10,
+      "avg_tool_calls": 1.8,
+      "avg_iterations": 0.7,
+      "avg_latency": 4.154954791069031,
+      "total_latency": 41.54954791069031
+    },
+    "diagnostics": {
+      "overall": {
+        "avg_hop_recall": 1.0,
+        "premature_collapse_rate": 0.0,
+        "over_extension_rate": 0.0,
+        "avg_step_alignment": 0.9,
+        "total_samples": 10
+      },
+      "by_hop": {
+        "2hop": {
+          "count": 10,
+          "avg_hop_recall": 1.0,
+          "premature_rate": 0.0,
+          "over_ext_rate": 0.0
+        }
+      }
+    },
+    "avg_judge_correctness": 0.3,
+    "avg_judge_faithfulness": 0.8,
+    "avg_judge_context_precision": 1.0
+  },
+  "results": [
+    {
+      "idx": 0,
+      "subset": "2hop_comparison",
+      "hop_count": 2,
+      "question": "Which RLL encoding stores more data bits per inch, (1,3) RLL encoding or (2,7) RLL encoding?",
+      "gold": "(1,3) RLL encoding",
+      "prediction": "(2,7) RLL encoding",
+      "em": 0.0,
+      "f1": 0.6666666666666666,
+      "diagnostics": {
+        "hop_recall": 1.0,
+        "premature_collapse": false,
+        "over_extension": false,
+        "step_alignment": 0.5,
+        "hop_count": 2,
+        "total_tool_calls": 1,
+        "iteration_count": 0,
+        "evidence_count": 1
+      },
+      "latency": 1.8880207538604736,
+      "evidence_text": "[964e2c5684ba] \n\"Run-length limited\"\n3,200 data bits per inch. A (1,7) RLL encoding can also store 6,400 encoded bits per inch on the tape, but since it only takes 3 encoded bits to store 2 data bits this is 4,267 data bits per inch. A (2,7) RLL encoding takes 2 encoded bits to store each data bit, but since there is guaranteed to be two 0 bits between any 1 bits then it is possible to store 9,600 encoded bits per inch on the tape, or 4,800 data bits per inch. The flux reversal densities on hard drives are significantly greater, but the same\n\n[e743840e18a7] \n\"Run-length limited\"\nof 1–0 pairs is 000 101 010 101 000. This code limits the ones density to between and , with an average of 25.8%. For example, let us encode the bit sequence 10110010 with different encodings Suppose a magnetic tape can contain up to 3,200 flux reversals per inch. A Modified Frequency Modulation or (1,3) RLL encoding stores each data bit as two bits on tape, but since there is guaranteed to be one 0 (non flux reversal) bit between any 1 (flux reversal) bits then it is possible to store 6,400 encoded bits per inch on the tape, or\n\n[0e7bf6f02f7f] \nGeohash-36\nstoring GPS coordinates using the Decimal datatype in SQL the Geohash-36 does not save significantly on database bytes. Using DECIMAL(8,5) and DECIMAL(7,5) requires 10-bytes. An equivalent 10-bytes of the Geohash-36 code is accurate to approximately a 6th of square meter. The Statue of Liberty, at coordinates 40.689167, -74.044444, is encoded as 9LVB4BH89g-m. The reverse decoding equates to 40.68916\"\"8\"\",-74.044445. The Shard building, London, at coordinates 51.504444, -0.086667 is encoded as bdrdC26BqH-m (decodes to 51.504444,-0.08666\"\"6\"\"), or may be successfully shorted to bdrdC26B. Geohash-36 The Geohash-36 geocode is an opensource compression algorithm for world coordinate data. It was developed as a variation of\n\n[712332e6e1f3] \n\"Planck mass\"\nPlanck mass In physics, the Planck mass, denoted by \"\"m\"\", is the unit of mass in the system of natural units known as Planck units. It is approximately 0.02 milligrams. Unlike some other Planck units, such as Planck length, Planck mass is not a fundamental lower or upper bound; instead, Planck mass is a unit of mass defined using only what Max Planck considered fundamental and universal units. One Planck mass is roughly the mass of a flea egg. For comparison, this value is of the order of 10 (a quadrillion) times larger than the highest energy available to contemporary\n\n[cf47d6599600] \n\"Minuscule 376\"\nMinuscule 376 Minuscule 376 (in the Gregory-Aland numbering), ε 100 (Soden), is a Greek minuscule manuscript of the New Testament, on parchment. Paleographically it has been assigned to the 11th century. It has marginalia. The codex contains the text of the four Gospels on 185 parchment leaves (). The text is written in one column per page, in 28 lines per page. The text of Luke 1:42-71 and two leaves in Mark were supplied by a later hand. The text is divided according to the (\"\"chapters\"\"), whose numbers are given at the margin, and their τιτλοι (\"\"titles of chapters\"\") at",
+      "judge_correctness": 0.0,
+      "judge_faithfulness": 1.0,
+      "judge_context_precision": 1.0
+    },
+    {
+      "idx": 1,
+      "subset": "2hop_comparison",
+      "hop_count": 2,
+      "question": "Which is heavier, the Army's early 155-mm artillery or a stone in the measurement system mentioned?",
+      "gold": "The Army's early 155-mm artillery",
+      "prediction": "100 lbs",
+      "em": 0.0,
+      "f1": 0.0,
+      "diagnostics": {
+        "hop_recall": 1.0,
+        "premature_collapse": false,
+        "over_extension": false,
+        "step_alignment": 1.0,
+        "hop_count": 2,
+        "total_tool_calls": 2,
+        "iteration_count": 1,
+        "evidence_count": 2
+      },
+      "latency": 5.489319801330566,
+      "evidence_text": "[70fa78610d2b] \n\"High-Capacity Artillery Projectile (HICAP)\"\nin Picatinny Arsenal, NJ. Five HICAP projectiles were successfully tested at the Yuma Proving Ground, AZ in June 1996. The Army’s early 155-mm artillery had steel bodies and weighed 100 lbs. 65% percent of the weight of the shell was in the steel body. This original design, while durable enough to withstand inertial loads during firing, was limited in the amount of munitions that could be carried within the shell. During the Composite Artillery Projectile Program, the Army sought to enhance the payload of 155mm shells while reducing the ammunition’s bulk. A mass-efficient projectile, also called High-Capacity Artillery Projectile, was\n\n[f9b8e2184474] \nAS-30\nlink between the aircraft and the missile. The only difference between the AS-30 and AS-30L is their guidance systems. In appearance, the earlier AS-30 has a sharp nose and the AS-30L has a slightly blunted nose. The AS-30L is employed for attacking targets which require a high degree of precision to engage effectively, but are also potentially dangerous enough to necessitate a longer-distance \"\"stand off\"\" attack profile to reduce the danger to the aircraft and pilot to ground-based anti-aircraft defences. The missile has a range of 3 to 11 kilometers, carries a 240 kilogram warhead, and claims a 1-meter CEP\n\n[ebc99924acc7] \n\"Manurhin MR 73\"\nThe factory guarantees that the cylinder will not burst or show any bulging or deformation with .357 Magnum ammunition developing double the standard maximum allowable pressure of 300 MPa, meaning the cylinder can withstand 600 MPa (87000 psi, or 43.5 tons per square inch). The frame, cylinder, and barrel of the MR73 are made from ordnance-certified, alloyed steel. Barrels are manufactured by cold-hammering. The rifling is formed during the forging process, eliminating the need to cut the rifling as a separate manufacturing step. This creates an extremely hard and microscopically smooth internal barrel surface. MANURHIN S.A; had made a counterweight\n\n[d74e1c8ff2e8] \n\"Igor Vovchanchyn\"\nwas 93 kg only for the last two years in PRIDE when they introduced weight divisions. But actually my natural weight is around 103-104 kg. Losing weight I did't feel myself as strong as before. But 104 kg is the best weight for me and I am really comfortable about it. I felt strong, powerful, full of energy. Due to losing weight I felt lack of self-confidence. By the way the same goes for Fedor (Emelianenko), when he lost the weight, he felt out of his comfort zone. It's not about the shape and visual muscular performance but it was\n\n[ad1eb036a103] \n\"Guided bomb\"\nless accurate; the JDAM achieves a published circular error probable (CEP) of 13 m under GPS guidance, but typically only 30 m under inertial guidance (with free fall times of 100 seconds or less). The precision of these weapons is dependent both on the precision of the measurement system used for location determination and the precision in setting the coordinates of the target. The latter critically depends on intelligence information, not all of which is accurate. According to a CIA report, the accidental bombing of the Chinese embassy in Belgrade during Operation Allied Force by NATO aircraft was attributed to\n\n[60340e03b298] \n\"System of measurement\"\nuses a stone of 14 lb, a long hundredweight of 112 lb and a long ton of 2240 lb. The stone is not used in the US and the hundredweights and tons are short: 100 lb and 2000 lb respectively. Where these systems most notably differ is in their units of volume. A US fluid ounce (fl oz), about 29.6 millilitres (ml), is slightly larger than the imperial fluid ounce (about 28.4 ml). However, as there are 16 US fl oz to a US pint and 20 imp fl oz per imperial pint, the imperial pint is about 20% larger.\n\n[712332e6e1f3] \n\"Planck mass\"\nPlanck mass In physics, the Planck mass, denoted by \"\"m\"\", is the unit of mass in the system of natural units known as Planck units. It is approximately 0.02 milligrams. Unlike some other Planck units, such as Planck length, Planck mass is not a fundamental lower or upper bound; instead, Planck mass is a unit of mass defined using only what Max Planck considered fundamental and universal units. One Planck mass is roughly the mass of a flea egg. For comparison, this value is of the order of 10 (a quadrillion) times larger than the highest energy available to contemporary\n\n[b6593f5296ab] \n\"Light welterweight\"\nLight welterweight Light welterweight, also known as junior welterweight or super lightweight, is a weight class in combat sports. In professional boxing, light welterweight is contested between the lightweight and welterweight divisions, in which boxers weigh above 135 pounds and up to 63.5 kg or 140 pounds. The first champion of this weight class was Pinky Mitchell in 1946, though he was only awarded his championship by a vote of the readers of the \"\"Boxing Blade\"\" magazine. There was not widespread acceptance of this new weight division in its early years, and the New York State Athletic Commission withdrew recognition",
+      "judge_correctness": 0.0,
+      "judge_faithfulness": 1.0,
+      "judge_context_precision": 1.0
+    },
+    {
+      "idx": 2,
+      "subset": "2hop_comparison",
+      "hop_count": 2,
+      "question": "Which hospital has more beds, the Memorial Hospital of Rhode Island or the Primary Health Centre in Mundalika?",
+      "gold": "Memorial Hospital of Rhode Island",
+      "prediction": "Memorial Hospital of Rhode Island",
+      "em": 1.0,
+      "f1": 1.0,
+      "diagnostics": {
+        "hop_recall": 1.0,
+        "premature_collapse": false,
+        "over_extension": false,
+        "step_alignment": 1.0,
+        "hop_count": 2,
+        "total_tool_calls": 2,
+        "iteration_count": 1,
+        "evidence_count": 2
+      },
+      "latency": 4.052277326583862,
+      "evidence_text": "[3896e9506047] \n\"Memorial Hospital of Rhode Island\"\nApril 2018, CharterCare announced plans to purchase Memorial Hospital, but Care New England expressed doubt as to whether the hospital could be re-opened. Memorial Hospital of Rhode Island The Memorial Hospital of Rhode Island was a hospital in Pawtucket, Rhode Island, USA. The hospital was founded through an 1894 bequest from William F. Sayles, a businessman and philanthropist who owned mills in Saylesville, Rhode Island. Sayles' son, Frank A. Sayles, decided to build the original 30-bed hospital with the funds. Throughout the 20th century the size of the hospital expanded greatly. Today the hospital is a 294-bed facility serving the\n\n[469ab2cc8921] \n\"Jose B. Lingad Memorial Regional Hospital\"\nwas appointed Chief of Hospital. Dr. Banzon is until the present time occupies the said position. The Jose B. Lingad Memorial Regional Hospital is a Level III tertiary, teaching and training hospital with 250 authorized beds as mandated by R.A. 6780 year 1990. The hospital caters to the people of Region III with the people of Pampanga as its primary catchment area and the nearby provinces of Bataan, Nueva Ecija, Bulacan, Tarlac, Zambales and Aurora as its secondary catchment areas. In 2012, Republic Act No. 10355, “An Act increasing the Bed Capacity of Jose B. Lingad Memorial General Hospital in\n\n[e6cdd79a6192] \n\"St. Luke's General Hospital\"\n71.9% of all admissions were made via the emergency department. The hospital saw 2,193 live births in 2008. The hospital provides 285 beds, of which 228 are in-patient acute beds, while 12 are reserved for day cases. A further 45 beds are designated for in-patient psychiatric care. In-patient services include general medicine, general surgery, geriatrics, accident and emergency, endocrinology, palliative care, coronary care, oncology, rheumatology, obstetrics and gynaecology, paediatrics, psychiatry, and day surgery. Independent audits rated hygiene levels as 76% or \"\"fair\"\" in 2005, rising to 89% or \"\"good\"\" in 2006. Hospital-acquired infection affected 1.8% of patients in 2007, with\n\n[243e5737a511] \n\"Srirampore subdivision\"\nbedsFemale Vagrants Home, Uttarpara Kotrung Municipality.Konnagar Matri Sadan O Sishu Mangal Pratisthan, Konnagar Municipality, 43 beds.Rishra Municipal Seva Sadan, Rishra Municipality,150 beds. Rural Hospitals: (Name, block, location, beds) Jangipara Rural Hospital, Jangipara CD Block, Jangipara, 60 beds. Akuni Ichhapasar Rural Hospital, Chanditala I CD Block, Aniya, 30 beds. Chanditala Rural Hospital, Chanditala II CD Block, Chanditala, 30 beds. Kanaipur Rural Hospital, Sreerampur Uttarpara CD Block, Kanaipur, 30 beds. Primary Health Centres (CD Block-wise)(CD Block, PHC location, beds) Jangipara CD Block: Mundalika (10 beds), Furfura (10 beds), Guti (4 beds), Rajbalhat (6 beds). Chanditala I CD Block: Bhattapur, Akuni (4 beds),\n\n[43f4153cb7b2] \n\"Mahatma Gandhi Memorial Medical College, Indore\"\nY. Hospital has 1200 beds with all the major medical departments: surgery, medicine, obstetrics and gynaecology, dermatology, chest and TB, orthopaedics, E.N.T., ophthalmology, radiology, anaesthesiology, paediatrics, forensic medicine, and casualty, cardiology, neurology, gastroenterology, nephrology, endocrinology divisions are under parent medicine department. Medicine dept. has 18 bedded MICU, 8 bedded ICCU, 5 hemodialysis machines, endoscopy unit, ventilators, etc. There are SICU, NICU, PICU, burn units, and surgical superspeciality units in M Y Hospital. This eight-storied govt. hospital is surrounded by a group of hospitals in MYH campus: 300-bedded Chacha Nehru Children hospitals, 100-bedded M.R. TB hospital, 100-bedded cancer hospital. The old\n\n[f7e393bbb761] \n\"Basirhat subdivision\"\nbeds Sandeshkhali Rural Hospital, Sandeshkhali, 26 beds Haroa (Adampur) Rural Hospital, Haroa, 30 beds Sandelerbil Rural Hospital, Sandelerbil, 30 beds Dhanyakuria Rural Hospital, Dhanyakuria, 30 beds Block Primary Health Centres: (Name, block, location, beds) Shibhati BPHC, Shibhati, 15 beds Primary Health Centres: (CD Block-wise)(CD Block, PHC location, beds) Baduria CD Block: Dakshin Chatra PHC (6), Jadurhati PHC (6), Masia PHC (6), Bajitpur PHC, Model Belghoria (10), Haroa CD Block: Gopalpur PHC (10), Kamarghanti PHC, Sonapukur (6) Minakhan CD Block: Nimichi PHC (6), Duturdaha (10) Swarupnagar CD Block: Bankra PHC (10), Charghat PHC (10) Hasnabad CD Block: Bhawanipur PHC, Bhurkundu (10),",
+      "judge_correctness": 1.0,
+      "judge_faithfulness": 1.0,
+      "judge_context_precision": 1.0
+    },
+    {
+      "idx": 3,
+      "subset": "2hop_comparison",
+      "hop_count": 2,
+      "question": "Which star has a greater mass compared to the Sun, HD 210702 or 11 Andromedae?",
+      "gold": "11 Andromedae",
+      "prediction": "HD 210702 has a greater mass compared to the Sun than 11 Andromedae",
+      "em": 0.0,
+      "f1": 0.3076923076923077,
+      "diagnostics": {
+        "hop_recall": 1.0,
+        "premature_collapse": false,
+        "over_extension": false,
+        "step_alignment": 0.5,
+        "hop_count": 2,
+        "total_tool_calls": 1,
+        "iteration_count": 0,
+        "evidence_count": 1
+      },
+      "latency": 2.1966638565063477,
+      "evidence_text": "[4c8081f9aedf] \n\"11 Andromedae\"\nthe main sequence. It has an estimated 2.57 times the mass of the Sun and has expanded to around 12 times the Sun's radius. It is radiating 63 times the Sun's luminosity from its enlarged photosphere at an effective temperature of 4,874 km/s. 11 Andromedae 11 Andromedae, abbreviated 11 And, is a single, orange-hued star in the northern constellation of Andromeda. \"\"11 Andromedae\"\" is the Flamsteed designation. It has an apparent visual magnitude of 5.44, which is bright enough to be faintly visible to the naked eye. An annual parallax shift of yields a distance estimate of 283 light years.\n\n[5176de23dad9] \n\"HD 210702\"\nObservatories in Mount Hamilton (California) and Mauna Kea (Hawai'i), United States. HD 210702 HD 210702 is an orange subgiant star located approximately 179 light-years away in the constellation of Pegasus. With a mass of 1.8 times that of the Sun, the star spent its main-sequence life as an A-type star. The visual luminosity is 11.38 times that of the Sun and it is 182.4 light years away. The magnitude is near the naked-eye limit, but binoculars can easily see it. The star shows variability in its radial velocity consistent with a planet-mass companion in a Keplerian orbit, and one was\n\n[85f4b5095994] \n\"Chi Piscium\"\nPiscium is estimated to have 3.17 times the mass of the Sun, nearly 21 times the solar radius, and shines with 209 times the Sun's luminosity. It is around 380 million years old. In Chinese, (), meaning \"\"Legs (asterism)\"\", refers to an asterism consisting of χ Piscium, η Andromedae, 65 Piscium, ζ Andromedae, ε Andromedae, δ Andromedae, π Andromedae, ν Andromedae, μ Andromedae, β Andromedae, σ Piscium, τ Piscium, 91 Piscium, υ Piscium, φ Piscium and ψ¹ Piscium. Consequently, χ Piscium itself is known as (, .) Chi Piscium Chi Piscium (χ Piscium) is a solitary, orange-hued star in the\n\n[d6a2aaff9df8] \n\"Omega Persei\"\na red clump star that is generating energy via helium fusion at its core. At the estimated age of 1.65 billion years, Omega Persei has double times the mass of the Sun and has expanded to about 19 times the Sun's radius. It is radiating 144.5 times the Sun's luminosity from its photosphere at an effective temperature of 4,586 K. Omega Persei Omega Persei (ω Persei) is a solitary, orange-hued star in the northern constellation of Perseus. It has the traditional name Gorgonea Quarta, being the fourth member of the quartet called the Gorgonea in reference to the Gorgons from\n\n[026b99883140] \n\"HD 195564\"\nmain sequence star that is generating energy through the process of thermonuclear fusion in its core region. It has an estimated mass of 1.097 times the mass of the Sun, but a measured radius that is 1.867 times as large. As a result, it shines with 2.705 times the luminosity of the Sun. The abundance of elements in this star is similar to that in the Sun, although it is an older star with an age of around 8.2 billion years. The effective temperature of the stellar atmosphere is 5,421 K, giving it the yellow-hued glow of an ordinary K-type",
+      "judge_correctness": 0.0,
+      "judge_faithfulness": 0.0,
+      "judge_context_precision": 1.0
+    },
+    {
+      "idx": 4,
+      "subset": "2hop_comparison",
+      "hop_count": 2,
+      "question": "Which building has more stories, the William Minott House or the Carbon12 building?",
+      "gold": "Carbon12 building",
+      "prediction": "Carbon12",
+      "em": 0.0,
+      "f1": 0.6666666666666666,
+      "diagnostics": {
+        "hop_recall": 1.0,
+        "premature_collapse": false,
+        "over_extension": false,
+        "step_alignment": 1.0,
+        "hop_count": 2,
+        "total_tool_calls": 2,
+        "iteration_count": 1,
+        "evidence_count": 2
+      },
+      "latency": 4.967720985412598,
+      "evidence_text": "[96745b0f27b6] \n\"William Minott House\"\nWilliam Minott House The William Minott House is a historic house at 45 Park Street in Portland, Maine. It is one of Portland's few Federal period houses, notably surviving the city's devastating 1866 fire. It was listed on the National Register of Historic Places on July 10, 1979. The house is located on the east side of Portland's West End, at the northern corner of Park and Nye Streets. It is a three-story wood frame structure, with low-pitch hip roof, four end chimneys, clapboard siding, and a granite foundation. A two-story ell extends to the rear, and extends beyond the\n\n[cf47d6599600] \n\"Minuscule 376\"\nMinuscule 376 Minuscule 376 (in the Gregory-Aland numbering), ε 100 (Soden), is a Greek minuscule manuscript of the New Testament, on parchment. Paleographically it has been assigned to the 11th century. It has marginalia. The codex contains the text of the four Gospels on 185 parchment leaves (). The text is written in one column per page, in 28 lines per page. The text of Luke 1:42-71 and two leaves in Mark were supplied by a later hand. The text is divided according to the (\"\"chapters\"\"), whose numbers are given at the margin, and their τιτλοι (\"\"titles of chapters\"\") at\n\n[f960b8fa3b98] \n\"Minuscule 747 (Gregory-Aland)\"\nat the Bibliothèque nationale de France (Suppl. Gr. 612) in Paris. Minuscule 747 (Gregory-Aland) Minuscule 747 (in the Gregory-Aland numbering), A (von Soden), is a Greek minuscule manuscript of the New Testament written on parchment. It is dated by a Colophon to 1164 CE. The manuscript has complex contents. Scrivener labelled it as 741. The codex contains a complete text of the four Gospels on 376 parchment leaves (size ). The text is written in one column per page, 9-25 lines per page for biblical text, and 47 lines per page for a commentary's text. The text is divided according\n\n[09c195d1ec88] \n\"Cobham Hall\"\nCobham Hall Cobham Hall is an independent day and boarding school for girls in Cobham, Kent. The school is housed in a Tudor era manor, which is now Grade I listed, and sits in 150 acres of historic parkland on the edge of the Kent Downs. It is a Round Square school and a member of the Girls' Schools Association. The School featured in the film \"\"Wild Child\"\" in 2008, as the fictional school that the characters attended, called Abbey Mount. There has been a manor house on the site since the 12th century. The current building consists of a\n\n[368eba1fc946] \n\"Minuscule 246\"\nMinuscule 246 Minuscule 246 (in the Gregory-Aland numbering), ε 460 (Soden), is a Greek minuscule manuscript of the New Testament, on paper. Palaeographically it has been assigned to the 14th century. The codex contains a complete text of the four Gospels on 189 paper leaves (size ), with two lacunae (Matthew 12:41-13:55; John 17:24-18:20). The text is written in one column per page, 26 lines per page. It contains tables of the (\"\"tables of contents\"\") before each Gospel, lectionary markings at the margin for liturgical use, marginal various readings. Synaxarion and Menologion were added by a later hand. The Greek\n\n[c10814436644] \nCarbon12\nCarbon12 Carbon12 is a wooden building in north Portland, Oregon, in the United States. The 8-story structure built with Oregon-made cross laminated timber became the tallest wood building in the United States, upon its completion. While the use of timber frames for the construction of 1-2 story buildings is typical in many countries (see: timber framing), antiquated building codes in the United States discouraged wood frame construction in 5-floor buildings or higher for many years. With the advancement of science, construction technologies and innovation have led to the use of engineered wood products that have load capacities stronger than steel,\n\n[1d4db209980a] \n\"125 High Street\"\nin 1988 to make room for 125 High Street. The complex consists of four buildings. The exterior is of a unifying granite, with entrances to the building through the High Street Tower and Oliver Street Tower. The two towers are connected via a central 8-story atrium with skylights 150 feet (46 m) above the floor. 125 High Street 125 High Street is a 30-floor postmodern highrise in the Financial District of Boston, Massachusetts. Standing 452 feet (138 m) tall, the highrise is currently the 23nd-tallest building in the city. 125 High Street has approximately 1.8 million square feet (167,000 square\n\n[b670adc670ad] \n\"Kingston, Ontario\"\nits municipal government, the city is divided into 12 wards; each elects one councilor. All voters in the city cast ballots for the mayor, currently Bryan Paterson, an economics professor at the Royal Military College of Canada. The 13 form Kingston City Council. Paterson was re-elected in the 2018 Ontario municipal elections for the 2018–2022 term. The councilors elected for the same term were: Kingston is part of two federal ridings. Most of the city is in Kingston and the Islands, created in 1966 from Kingston and parts of Hastings—Frontenac—Lennox and Addington and Prince Edward—Lennox. Previously Kingston's mayor, Mark Gerretsen\n\n[c9c7b173d59a] \n\"Grade II listed buildings in Southampton: S\"\nthe process and advise the department on relevant issues. There are three grades of listing status. The Grade II designation is the lowest, and is used for \"\"nationally important buildings of special interest\"\". Grade II* is used for \"\"particularly important buildings of more than special interest\"\", while Grade I (defined as being of \"\"exceptional interest\"\" and greater than national importance), is the highest of the three grades. This list summarises 40 Grade II-listed buildings and structures whose names begin with S. Numbered buildings with no individual name are listed by the name of the street on which they stand. Grade",
+      "judge_correctness": 1.0,
+      "judge_faithfulness": 1.0,
+      "judge_context_precision": 1.0
+    },
+    {
+      "idx": 5,
+      "subset": "2hop_comparison",
+      "hop_count": 2,
+      "question": "Which segment carries a higher average daily vehicle count, the Opelousas segment of Interstate 49 or the Salamanca-León segment?",
+      "gold": "Opelousas segment of Interstate 49",
+      "prediction": "Opelousas",
+      "em": 0.0,
+      "f1": 0.33333333333333337,
+      "diagnostics": {
+        "hop_recall": 1.0,
+        "premature_collapse": false,
+        "over_extension": false,
+        "step_alignment": 1.0,
+        "hop_count": 2,
+        "total_tool_calls": 2,
+        "iteration_count": 1,
+        "evidence_count": 2
+      },
+      "latency": 5.4599690437316895,
+      "evidence_text": "[34e4f5959360] \n\"Interstate 49 in Louisiana\"\ntraveling northward through Caddo Parish, passing between the small communities of Gilliam and Hosston. I-49 crosses the Arkansas state line just north of Ida and proceeds toward the city of Texarkana. The heaviest traffic on I-49 occurs within the cities of Shreveport and Opelousas. The stretch of freeway in Shreveport sees an average of 70,000 vehicles per day, while the stretch of freeway between Lafayette and Carencro sees an average of 55,000 vehicles per day, and the stretch of freeway through Opelousas sees an average of 45,000 vehicles per day between the Judson Walsh Drive and Creswell Lane exits. The\n\n[c5b305275c14] \n\"Springfield Interchange\"\n[2005], the project was months behind schedule, and managers predicted that it would not be completed on time. But VDOT officials pressured the primary contractor, including issuing a formal default letter, and work was put back on schedule without adding costs.\"\" The project was completed on time in July 2007. The new interchange has 50 ramps and bridges, is 24 lanes at its widest point, and has a capacity of 500,000 vehicles per day. Phase 8 involved the construction of ramps connecting Shirley Highway's reversible center carriageway (HOV lanes) to the Capital Beltway. It was originally planned to be part\n\n[6221e825571e] \n\"Mexican Federal Highway 45D\"\nback northwest, with one partially built spur immediately preceding the Puerta Interior toll plaza, before ending at Fed. 45D on the southeast edge of the León metro. A connection into the León metropolitan street system at Bulevar Delta was under construction and expected to open in early 2017. The Salamanca-León segment formally opened on September 21, 2015 with a dedication ceremony by President Enrique Peña Nieto. It cost 3.45 billion pesos and is estimated to carry 9,450 cars a day. It is maintained by Grupo México subsidiary Concesionaria Infraestructura del Bajío, S.A. de C.V. and costs cars 43 pesos to\n\n[67665111e090] \n\"Southern Illinois Airport\"\n2009, the airport had 77,557 aircraft operations, an average of 212 per day: 99% general aviation, 1% air taxi, <1% scheduled commercial, and <1% military. At that time there were 89 aircraft based at this airport: 87% single-engine, 9% multi-engine, 1% jet, 2% helicopter and 1% ultralight. The airport is capable of accommodating a variety of aircraft up to and including the Boeing 757. Sufficient aircraft ramps and tie-down spaces exist for a large and varied number of aircraft. Hangar space is available for based and transient aircraft up to and including the Gulfstream V. Southern Illinois Airport is also\n\n[09110e43c94a] \n\"Irving, Texas\"\nDallas region's transit agency, Dallas Area Rapid Transit (DART). Currently, Irving is served by numerous bus routes and has two stops along the Trinity Railway Express commuter rail route. In addition, DART's through runs through Irving and Las Colinas to DFW Airport. This connects northern Irving with Dallas through rail in addition to bus routes. In 2015, 4.5 percent of Irving households lacked a car, which increased to 4.9 percent in 2016. The national average was 8.7 percent in 2016. Irving averaged 1.75 cars per household in 2016, compared to a national average of 1.8 per household. The Las Colinas\n\n[7df2c08c43dc] \n\"Chevy Chase (CDP), Maryland\"\n0.3% non-Hispanic from some other race, 3.0% from two or more races and 5.5% Hispanic or Latino. As of the census of 2000, there were 9,381 people, 3,831 households, and 2,463 families residing in the CDP. The population density was 3,828.8 people per square mile (1,478.4/km²). There were 3,959 housing units at an average density of 1,615.8/sq mi (623.9/km²). The racial makeup of the CDP was 89.99% White or European American, 3.68% Black or African American, 0.14% Native American, 2.97% Asian, 0.06% Pacific Islander, 1.11% from other races, and 2.05% from two or more races. Hispanic or Latino of any\n\n[fff80c0e9f2b] \n\"Evangeline Parish, Louisiana\"\nthere were 35,434 people, 12,736 households, and 9,157 families residing in the parish. The population density was 53 people per square mile (21/km²). There were 14,258 housing units at an average density of 22 per square mile (8/km²). The racial makeup of the parish was 70.42% White, 28.57% Black or African American, 0.23% Native American, 0.14% Asian, 0.01% Pacific Islander, 0.18% from other races, and 0.46% from two or more races. 1.04% of the population were Hispanic or Latino of any race. 25.71% reported speaking French or Cajun French at home, the highest percentage of any Louisiana parish. There were\n\n[de2580036384] \n\"Lake Tahoe\"\ndue to tourists if not also from weather. The primary routes to Lake Tahoe are on Interstate 80 via Truckee, U.S. Route 50, and Nevada State Route 431 via Reno. Most of the highways accessing and encircling Lake Tahoe are paved two-lane mountain roads. US 50 is a four-lane highway (from the canyon of the South Fork American River at Riverton, over the Sierra Nevada at Echo Summit, and into the Lake Tahoe Basin, is a mainly two-lane road) passing south of the lake and along part of the eastern shore. California State Route 89 follows the western shore of",
+      "judge_correctness": 1.0,
+      "judge_faithfulness": 1.0,
+      "judge_context_precision": 1.0
+    },
+    {
+      "idx": 6,
+      "subset": "2hop_comparison",
+      "hop_count": 2,
+      "question": "Which vehicle has more horsepower, the Cadet LCA or the Hyundai Tucson Turbo presented at the 2016 CES show?",
+      "gold": "Hyundai Tucson Turbo",
+      "prediction": "701 hp",
+      "em": 0.0,
+      "f1": 0.0,
+      "diagnostics": {
+        "hop_recall": 1.0,
+        "premature_collapse": false,
+        "over_extension": false,
+        "step_alignment": 1.5,
+        "hop_count": 2,
+        "total_tool_calls": 3,
+        "iteration_count": 1,
+        "evidence_count": 3
+      },
+      "latency": 5.464394569396973,
+      "evidence_text": "[34fc8a17aefe] \n\"Culver Cadet\"\nCulver Cadet The Culver Cadet is an American two-seat light monoplane aircraft, also once a radio-controlled drone, produced by the Culver Aircraft Company. The aircraft designer Al Mooney developed an improved version of the Culver Dart, to provide improved performance with a smaller engine. Originally designated the Culver Model L the prototype first flew on 2 December 1939. The aircraft was named the Culver Cadet. Although similar to the previous Dart the Cadet had a semi-monocoque fuselage instead of welded-steel-tube and a retractable tailwheel undercarriage. The first variant (the Cadet LCA) was powered by a 75 hp (56 kW) Continental\n\n[2a2b40838a3e] \n\"Oswego Speedway\"\n2006 (at the age of 66). The modern Supermodified car is a front-engine / rear-drive vehicle with a big block Chevrolet engine mounted on the left side of the chassis to maximize kinetic force for left turns on the 5/8-mile, asphalt track. The normally aspirated, fuel-injected engines make 900 or more horsepower, or one horsepower or more for each two pounds of weight (1800-lb. minimum). Save for the roll cage extension, the cars may be no more than 36 inches high. Most cars have wedge-shaped bodywork to provide downforce. The fastest non-wing Supermodifieds are capable of circling the track in\n\n[86f3a2222e81] \n\"Korres P4\"\n505 horsepower and is capable of reaching 100 km/h in 3.8 seconds with a maximum speed of 300 km/h (186 mph). The gearbox is specially made for the car and features 6 speed manual transmission (2.538, 1.611, 1.208, 0.933, 0.777, 0.560) with 3 transfer case ratios, normal (1:1 ratio), sports (1.62:1 ratio) and trial (5.95:1 ratio). P4 has a theoretical top speed of over 300 km/h (186.4 mph). The car's suspension is made by Korres Engineering. The P4 features an adjustable suspension system that can raise the car’s ride height by 400mm to help it negotiate speed bumps and other\n\n[6adf624d9483] \nEnergy\n(on average) at 80 watts, then a light bulb running at 100 watts is running at 1.25 human equivalents (100 ÷ 80) i.e. 1.25 H-e. For a difficult task of only a few seconds' duration, a person can put out thousands of watts, many times the 746 watts in one official horsepower. For tasks lasting a few minutes, a fit human can generate perhaps 1,000 watts. For an activity that must be sustained for an hour, output drops to around 300; for an activity kept up all day, 150 watts is about the maximum. The human equivalent assists understanding of\n\n[9315598ef965] \n\"LS based GM small-block engine\"\nof this version is /300 hp on LaCrosse Super and . Applications: Inspired by the LS1.R in size and performance goals, this family of blocks was designed for race oriented performance. The only engine with this bore size that was used in a production vehicle is the LS7 with the LSX being only for aftermarket use. One unique feature of this family is that the cylinders are siamesed, no water passages between neighboring cylinders. This was done to increase both bore size and block strength. LS7 The LS7 is a engine, based on the Gen IV architecture. The block is\n\n[0dc7172253c5] \n\"Bisi Ezerioha\"\nZealand 2016 SEMA: 400 hp RWB Porsche for SpeedHunters UK; 1080 hp Turbo RWD conversion Santa Fe, for Hyundai Motors America; 901 hp Ford Mustang for NGK Spark Plugs; 500 hp Porsche 911 twin turbo for Quaife Engineering UK 2016 CES show: 701 hp Hyundai Tucson Turbo for Harman Karden/JBL 2015 SEMA: 400 hp RWB Porsche for Need for speed Electronic Arts Video game company; 250 hp HR-V for American Honda; 700 hp Turbo Tucson, for Hyundai Motors America; 900 hp Mustang for Ford Motor Company; 500 hp Turbo RWB Porsche 911 for Toyo Tires 2014 SEMA: 400 hp and\n\n[f1a5a66fe468] \n\"Chrysler 300C\"\n2.0 seconds, 1/4 mile 8.56 @ 161 mph, and Top Speed of 265 mph with it's 3.06 gear ratio, The Punisher is the fastest street legal sedan in the world to date. Chrysler 300C The Chrysler Corporation has used the designation Chrysler 300C to refer to two separate unrelated vehicles from different eras: In 2018 the privately built Chrysler 300 SRT8 Punisher was unveiled. It has 1500 rwhp and 1288 ftlb of torque. https://ibb.co/iaM2cT A street legal sedan with all factory options and upgrades such as a full roll cage, complete NHRA safety package, and a 2.8 Liter liquid cooled\n\n[967dc0a346fd] \n\"Érik Comas\"\nthe \"\"Rallye Monte Carlo des Véhicules à Énergie Alternative\"\" (the opening event of the FIA Alternative Energies Cup) with a Tesla Roadster. In 2014 Comas won the Carrera Panamericana in a Studebaker. Then, between 2012 and 2017 Comas has only raced with a Stratos, having a hard time finding a competent team able to support him on his target; winning the overall classification of the FIA European Historic Rally Championship with his 1974 Lancia Stratos ahead of numerous younger cars such as; Lancia Delta, Lancia 037, Porsche group B, Renault 5 Turbo, BMW M3, Subaru Legacy and Sierra Cosworth… Érik\n\n[f58c260dcd96] \nCar\ngrowth between 2006 and 2007. Services like car sharing offering a residents to \"\"share\"\" a vehicle rather than own a car in already congested neighborhoods. The automotive industry designs, develops, manufactures, markets, and sells the world's motor vehicles. In 2008, more than 70 million motor vehicles, including cars and commercial vehicles were produced worldwide. In 2007, a total of 71.9 million new cars were sold worldwide: 22.9 million in Europe, 21.4 million in the Asia-Pacific Region, 19.4 million in the USA and Canada, 4.4 million in Latin America, 2.4 million in the Middle East and 1.4 million in Africa. The\n\n[a32ddab1d883] \n\"Citroën\"\nStates. Citroën has produced eight \"\"Auto Europa\"\" winners in 28 years, since 1987. \"\"Auto Europa\"\" is the prize awarded by the jury of the Italian Union of Automotive Journalists (UIGA), which annually celebrates the best car produced at least at 10,000 units in the 27 countries of the European Union: Citroën XM(1990), Citroën ZX (1992), Citroën Xantia (1994), Citroën Xsara Picasso (2001), Citroën C5 (2002), Citroën C3 (2003), Citroën C4 (2005) and Citroën DS4 (2012). Citroën Racing, previously known as Citroën Sport and before that as Citroën Competitions, is the team responsible for Citroën's sporting activities. It is a successful",
+      "judge_correctness": 0.0,
+      "judge_faithfulness": 1.0,
+      "judge_context_precision": 1.0
+    },
+    {
+      "idx": 7,
+      "subset": "2hop_comparison",
+      "hop_count": 2,
+      "question": "Which event occurred first, the birth of Leif Holbæk-Hanssen or the Action of 10 March?",
+      "gold": "Action of 10 March",
+      "prediction": "Birth of Leif Holbæk-Hanssen",
+      "em": 0.0,
+      "f1": 0.25,
+      "diagnostics": {
+        "hop_recall": 1.0,
+        "premature_collapse": false,
+        "over_extension": false,
+        "step_alignment": 0.5,
+        "hop_count": 2,
+        "total_tool_calls": 1,
+        "iteration_count": 0,
+        "evidence_count": 1
+      },
+      "latency": 2.0927717685699463,
+      "evidence_text": "[985331b8e767] \n\"Action of 10 March 1917\"\nAction of 10 March 1917 The Action of 10 March 1917 was a single-ship action during the First World War fought between the Imperial German Navy merchant raider , and the armed New Zealand Shipping Company cargo ship SS \"\"Otaki\"\". Although \"\"Otaki\"\" was sunk, \"\"Möwe\"\" was badly damaged. was already famous. Her commander, \"\"Korvettenkapitän\"\" Count Nikolaus zu Dohna-Schlodien, had taken \"\"Möwe\"\" around the world in 1915 and early 1916, sinking several vessels and fighting one engagement on 16 January with the British. With a veteran crew and ship, \"\"Kapitän\"\" Dohna-Schlodien ran the British blockade of Germany in December 1916 and\n\n[515b995ba633] \n\"Leif Holbæk-Hanssen\"\ninto Cultura Bank. In 2009, a collection of his writings titled \"\"Økonomi og samfunn - når mennesket blir viktigst\"\" was published by Antropos Forlag. Professor Ove Jakobsen at Bodø Graduate School of Business/University of Nordland, one of Holbæk-Hanssen's Dr. Oecon. students was an important mentor in this work. Leif Holbæk-Hanssen Leif Holbæk-Hanssen (27 March 1917 – 10 April 1991) was a Norwegian professor of economics and anthroposophist. Holbæk-Hanssen was born in Kristiania (Oslo), Norway, the son of dentist Harald Paul Holbæk-Hanssen (1889–1963) and Ingrid Siewers (1890–1921). He finished his secondary education in Fredrikstad in 1936, worked in marketing in Bergen\n\n[a814d60f868c] \n\"Early modern Europe\"\nEarly modern Europe Early modern Europe is the period of European history between the end of the Middle Ages and the beginning of the Industrial Revolution, roughly the late 15th century to the late 18th century. Historians variously mark the beginning of the early modern period with the invention of moveable type printing in the 1450s, the Fall of Constantinople in 1453, the end of the Wars of the Roses in 1487, the beginning of the High Renaissance in Italy in the 1490s, the end of the Reconquista and subsequent voyages of Christopher Columbus to the Americas in 1492, or\n\n[315c4227b81e] \n\"Major sports event hosting in Britain during the 2010s\"\n19–25 July – 2015 IPC Swimming World Championships at Tollcross International Swimming Centre in Glasgow 31 July - 8 August – World Orienteering Championships in Inverness 1 - 30 August 2015 – EuroHockey Nations Championship at Lee Valley Hockey and Tennis Centre in London 28 August - 6 September – European Wheelchair Basketball Championship 2015 18 September-31 October – Rugby World Cup in England 15–20 September – ICF Canoe Slalom World Championships at Lee Valley White Water Centre in London 23 October-1 November – World Artistic Gymnastics Championships in Glasgow 26-30 November – Wheelchair Tennis Masters at Lee Valley Hockey\n\n[770f908c2311] \n\"Leiden University Library\"\nmanages the largest collections worldwide on Indonesia and the Caribbean. Furthermore, Leiden University Library is the only heritage organization in The Netherlands with three registrations of documents in UNESCO's Memory of the World Register. The 16th-century Dutch Revolt against the Habsburgs created a new country with a new religion. Soon, the need for a seat of higher learning was felt and in 1575 Leiden University was founded with the spoils from a confiscated Catholic monastery nearby. At the time the university was founded, it was immediately determined that a library in the vicinity of lecture halls was an absolute necessity.",
+      "judge_correctness": 0.0,
+      "judge_faithfulness": 0.0,
+      "judge_context_precision": 1.0
+    },
+    {
+      "idx": 8,
+      "subset": "2hop_comparison",
+      "hop_count": 2,
+      "question": "Which has a larger seating capacity, PalaMangano or the Ironwood Theatre's original main floor?",
+      "gold": "PalaMangano",
+      "prediction": "3700",
+      "em": 0.0,
+      "f1": 0.0,
+      "diagnostics": {
+        "hop_recall": 1.0,
+        "premature_collapse": false,
+        "over_extension": false,
+        "step_alignment": 1.0,
+        "hop_count": 2,
+        "total_tool_calls": 2,
+        "iteration_count": 1,
+        "evidence_count": 2
+      },
+      "latency": 4.72898268699646,
+      "evidence_text": "[221243eec15d] \n\"Scafati Basket\"\nreach the first tier Serie A in 2006. It was relegated from the Serie A following its last place finish in 2007–08. The team has played its home games in the PalaMangano (named after former head coach Massimo Mangano), it holds 3,700 seats. Throughout the years, due to sponsorship, the club has been known as: Scafati Basket Scafati Basket, known for sponsorship reasons as Givova Scafati, is an Italian professional basketball club based in Scafati, Campania. It plays in the second-division Serie A2 as of the 2015–16 season. Scafati Basket traces its history to Silvio Pellico, a club founded in\n\n[1c3cd65e96f7] \n0.TO.10\n14 on Auction, with all available tickets sold out in under 30 minutes. On July 18, a portion of the tickets were opened for fans in China, and all tickets sold out in nine minutes, with total log-ins posting 1.98 million with maximum simultaneous log-ins of 1.58 million on Weying's ticket-selling platform. After the huge demand for the tickets, 5,000 additional seats were added despite the poor view. The concert attracted 65,000 fans and became the biggest audience ever for a solo concert in the South Korea. The paid live-stream of the concert was available through China's online platform Tencent,\n\n[f0f8d5f7920a] \n\"Quadricentennial Pavilion\"\nUST varsity players and the Growling Tigers starting academic year of 2012. The Quadricentennial Pavilion was designed by chief architect Carmelo Casas, who also designed the UST Carpark Building. The first architectural plan for the facility was made in 2007. For three years before the groundbreaking of the facility in July 2008, Millenium Sports Universal Co. coordinated with Casas in the planning and design stage where they were tasked to create a sporting facility of at least 5,000 seating capacity. The structure has four storeys with its first floor being elevated to address potential flooding. The dimensions of the sports\n\n[469ab2cc8921] \n\"Jose B. Lingad Memorial Regional Hospital\"\nwas appointed Chief of Hospital. Dr. Banzon is until the present time occupies the said position. The Jose B. Lingad Memorial Regional Hospital is a Level III tertiary, teaching and training hospital with 250 authorized beds as mandated by R.A. 6780 year 1990. The hospital caters to the people of Region III with the people of Pampanga as its primary catchment area and the nearby provinces of Bataan, Nueva Ecija, Bulacan, Tarlac, Zambales and Aurora as its secondary catchment areas. In 2012, Republic Act No. 10355, “An Act increasing the Bed Capacity of Jose B. Lingad Memorial General Hospital in\n\n[c1410325e4a6] \n\"Estadio Tiburcio Carías Andino\"\nhuman stampede during the 2017 Clausura final between F.C. Motagua and C.D. Honduras Progreso. Estadio Tiburcio Carías Andino The Estadio Nacional (official name) is a multi-purpose stadium in Tegucigalpa, Honduras. It is used mostly for Association football matches. The stadium has a capacity of 34,000 and it is the home of football clubs F.C. Motagua, C.D. Olimpia and Lobos UPNFM. The National Stadium of Tegucigalpa was built during the administration of Tiburcio Carías Andino. The stadium was Honduras national football team's home stadium in the FIFA World Cup qualification for many years. In 1981, the stadium was host to 6\n\n[6fd14b5c2951] \n\"Ironwood Theatre\"\nhand-sculpted faux pillars and arched proscenium style stage. The building seated 1,000 guests when it was originally built including 600 seats on the main floor and 400 seats on the balcony level. Due to many restoration efforts and improvements of the theatre's design, many seats were removed to accommodate for added luxuries including a handicapped accessible area, light & sound booth, and concession stand. The theatre now seats 732—480 seats on the main floor and 252 seats in the balcony. The chairs found in the theatre today are exact replica replacements of the seats originally installed. The Barton organ, happily\n\n[ab16f960c4b8] \n\"Ritchie Coliseum\"\ncost to students to witness this historic concert was only $1 (that’s just $8.72 today with inflation). The floor dimensions are 11,000 ft (1,021.9 m) with a surface of maple hardwood. The official seating capacity used to be 1,500. There are 1,900 total seats, which includes 600 folding seat-back chairs in the upper mezzanine, 700 pull-out bench seats, and 600 chairs on the floor. Other features are concessions stands on two levels, a ticket booth, and scoreboard. Additional facilities consist of a weight room with free weights and cardiovascular equipment, and a martial arts room with padded walls and mats.\n\n[d330fdcf729f] \n\"Beşiktaş J.K.\"\nBeşiktaş J.K. Beşiktaş Jimnastik Kulübü (), also known simply as Beşiktaş (), is a Turkish sports club founded in 1903, and based in the Beşiktaş district of Istanbul, Turkey. The club's football team is one of the most successful teams in Turkey, having never been relegated to a lower division. The team last won the Turkish Süper Lig championship during the 2016–17 season. The home ground of Beşiktaş is Vodafone Park, a 41,903 capacity all-seater stadium located next to Dolmabahçe Palace. The club also competes in other branches including basketball, volleyball, handball, athletics, boxing, wrestling, chess, bridge, gymnastics, rowing, table",
+      "judge_correctness": 0.0,
+      "judge_faithfulness": 1.0,
+      "judge_context_precision": 1.0
+    },
+    {
+      "idx": 9,
+      "subset": "2hop_comparison",
+      "hop_count": 2,
+      "question": "Which broadcasts more power, WSTK or the maximum sustained output of a human for an activity kept up all day?",
+      "gold": "WSTK",
+      "prediction": "250 watts",
+      "em": 0.0,
+      "f1": 0.0,
+      "diagnostics": {
+        "hop_recall": 1.0,
+        "premature_collapse": false,
+        "over_extension": false,
+        "step_alignment": 1.0,
+        "hop_count": 2,
+        "total_tool_calls": 2,
+        "iteration_count": 1,
+        "evidence_count": 2
+      },
+      "latency": 5.209427118301392,
+      "evidence_text": "[98fb57890b34] \nWSTK\nbroadcast with 250 watts of power. The station was rebranded as The Gospel Superstation. On June 1, 2009, WSTK went silent once again. On July 1, 2010, WSTK began simulcasting WEGG (710 AM) The Gospel Superstation, once again. On September 1, 2010, WSTK broke away from the simulcast with WEGG and was rebranded as Hometown Gospel Station before going silent yet again on October 4, 2010. On January 4, 2011, WSTK returned to the air as Your Christian Radio, broadcasting a traditional black gospel format. The station began a simulcast with WLGT-FM 98.3 on November 14, 2011. In April 2012,\n\n[4ce8593a09ac] \nWDTV\nthe official date in which full-power television stations in the United States transitioned from analog to digital broadcasts under federal mandate. The station's digital signal relocated from its pre-transition VHF channel 6 to channel 5. The station has construction permits to air two digital fill-in translators on VHF. Both will have the same call sign as the main signal. WDTV is carried as far south as Summersville in the Charleston–Huntington DMA. In the Pittsburgh DMA, it is carried in Morgantown, Markleysburg (PA) and Oakland (MD). In the Harrisonburg DMA, it is carried in Franklin, Pendleton County. During the 1970s and\n\n[b80246f5cedf] \n\"Wind power in Scotland\"\nlikely to come from wind power. On Sunday 7 August 2016, a combination of high wind and low consumption caused more wind power generation (106%) than consumption in Scotland. Scottish wind turbines provided 39,545 MWh during the 24 hours of that date, while consumption was 37,202 MWh. It was the first time that measurements were available to confirm that fact. On average, year round, renewables contribute over half of Scotland’s energy. The 54-turbine Black Law Wind Farm has a total capacity of 124 MW. It is located near Forth in Lanarkshire and was built on old opencast coalmine site, with\n\n[6adf624d9483] \nEnergy\n(on average) at 80 watts, then a light bulb running at 100 watts is running at 1.25 human equivalents (100 ÷ 80) i.e. 1.25 H-e. For a difficult task of only a few seconds' duration, a person can put out thousands of watts, many times the 746 watts in one official horsepower. For tasks lasting a few minutes, a fit human can generate perhaps 1,000 watts. For an activity that must be sustained for an hour, output drops to around 300; for an activity kept up all day, 150 watts is about the maximum. The human equivalent assists understanding of\n\n[83bd0542c2b6] \n\"VC11184 Ocean Surveillance Ship\"\nis powered by two imported 9,000 kW combined diesel and diesel (CODAD) configuration engines and three 1200 kW auxiliary generators. The ship will be fitted with a primary X band and a secondary S band active electronically scanned array (AESA) radar. In addition, it has a long open deck with ample space for installing multiple missile tracking antennas. It will have a crew complement of 300 personnel and will carry a single helicopter. The ship will also have a special team from National Technical Research Organisation on board. VC11184 Ocean Surveillance Ship VC11184 is the designation of a missile tracking\n\n[f7adbafdfb6d] \n\"Session Description Protocol\"\nthe 28 November 2010 at 10am UTC (the stop time of the repeated 1h session which is repeated each week at the same local time, which occurs 88 days later), this can be specified as: If the weekly 1-hour session was repeated every Sunday for full one year, i.e. from Sunday 1 August 2010 03am UTC to Sunday 26 June 2011 04am UTC (stop time of the last repeat, i.e. 360 days plus 1 hour later, or 31107600 seconds later), so that it would include the transition back to Summer time on Sunday 27 March 2011 at 02am (1 hour\n\n[e778f584f39e] \n\"Sandskeið\"\n150/330. Height above sea level is 180 m (600 ft). The radio frequency used is 119,90 MHz and there is an ATZ open when gliding activity is present which goes from gnd to 3000 ft msl and covers the airfield and a 12 km to the south, and 5 km to the east. There is a 10 km long mountain ridge only a few hundred meters from the airfield rising 400 – 550 meters above the landscape, that makes ridge soaring possible in winds between east and through north to westerly winds. Mountains and glaciers to the north and east\n\n[56326119be49] \n\"Konakovo Power Station\"\n2013 was 2520 MW, heat capacity — 120 Gcal/hour. In 2013 Konakovskaya GRES produced 8394 milions K.W.H. of energy. The useful output of heat energy for the same period was 228 thousand Gcal. There are 8 units, each of them includes heat boiler ПП-950-255-ГМ (ПК-41), turbounit К-325-240-7МР or К-305-240 of LMF and electro generator ТВВ-320-2-УЗ or ТВВ-350-2-УЗ of Electrosila. Generators of the station produce energy of 20 kW tension. In the energy system it enters on 220 KW, 330 KW and 500 KW tension through set-up transformers, autoformer of connection and open distribution device. Feed of house of every unit",
+      "judge_correctness": 0.0,
+      "judge_faithfulness": 1.0,
+      "judge_context_precision": 1.0
+    }
+  ]
+}

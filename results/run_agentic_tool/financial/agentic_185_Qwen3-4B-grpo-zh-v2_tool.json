@@ -1,0 +1,36 @@
+{
+  "table": [
+    {
+      "model": "Qwen3-4B-grpo-zh-v2",
+      "keyword_search": "47%",
+      "hybrid_search": "43%",
+      "semantic_search": "6%",
+      "graph_search": "3%"
+    }
+  ],
+  "tool_order": [
+    "keyword_search",
+    "hybrid_search",
+    "semantic_search",
+    "graph_search"
+  ],
+  "model": {
+    "source_file": "/data/lzl/workspace/AgenticRAG/results/eval_agentic/financial/agentic_185_Qwen3-4B-grpo-zh-v2.json",
+    "model": "Qwen3-4B-grpo-zh-v2",
+    "num_samples": 185,
+    "total_tool_calls": 419,
+    "zero_tool_samples": 0,
+    "counts": {
+      "graph_search": 13,
+      "hybrid_search": 182,
+      "keyword_search": 197,
+      "semantic_search": 27
+    },
+    "percentages": {
+      "graph_search": 3.1026252983293556,
+      "hybrid_search": 43.43675417661098,
+      "keyword_search": 47.01670644391408,
+      "semantic_search": 6.443914081145586
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "table": [
+    {
+      "model": "Qwen3-4B",
+      "keyword_search": "56%",
+      "hybrid_search": "42%",
+      "semantic_search": "1%",
+      "graph_search": "1%"
+    }
+  ],
+  "tool_order": [
+    "keyword_search",
+    "hybrid_search",
+    "semantic_search",
+    "graph_search"
+  ],
+  "model": {
+    "source_file": "/data/lzl/workspace/AgenticRAG/results/eval_agentic/financial/agentic_185_Qwen3-4B.json",
+    "model": "Qwen3-4B",
+    "num_samples": 185,
+    "total_tool_calls": 140,
+    "zero_tool_samples": 49,
+    "counts": {
+      "graph_search": 2,
+      "hybrid_search": 59,
+      "keyword_search": 78,
+      "semantic_search": 1
+    },
+    "percentages": {
+      "graph_search": 1.4285714285714286,
+      "hybrid_search": 42.142857142857146,
+      "keyword_search": 55.714285714285715,
+      "semantic_search": 0.7142857142857143
+    }
+  }
+}

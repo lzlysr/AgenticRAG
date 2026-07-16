@@ -1,0 +1,36 @@
+{
+  "table": [
+    {
+      "model": "Qwen3-4B-sft-zh",
+      "keyword_search": "45%",
+      "hybrid_search": "40%",
+      "semantic_search": "8%",
+      "graph_search": "7%"
+    }
+  ],
+  "tool_order": [
+    "keyword_search",
+    "hybrid_search",
+    "semantic_search",
+    "graph_search"
+  ],
+  "model": {
+    "source_file": "/data/lzl/workspace/AgenticRAG/results/eval_agentic/financial/agentic_185_Qwen3-4B-sft-zh_newindex.json",
+    "model": "Qwen3-4B-sft-zh",
+    "num_samples": 185,
+    "total_tool_calls": 431,
+    "zero_tool_samples": 0,
+    "counts": {
+      "graph_search": 29,
+      "hybrid_search": 173,
+      "keyword_search": 196,
+      "semantic_search": 33
+    },
+    "percentages": {
+      "graph_search": 6.728538283062645,
+      "hybrid_search": 40.13921113689095,
+      "keyword_search": 45.47563805104408,
+      "semantic_search": 7.65661252900232
+    }
+  }
+}
