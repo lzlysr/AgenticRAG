@@ -22,6 +22,8 @@ from tensordict import TensorDict
 from verl.utils import tensordict_utils as tu
 from verl.utils.dataset.dataset_utils import DatasetPadMode
 from verl.utils.device import is_npu_available
+from verl.utils.device import manual_seed as device_manual_seed
+from verl.utils.device import manual_seed_all as device_manual_seed_all
 from verl.utils.py_functional import append_to_dict
 from verl.utils.seqlen_balancing import rearrange_micro_batches, restore_dynamic_batch
 
@@ -34,26 +36,22 @@ def enable_full_determinism(seed: int):
 
     os.environ["PYTHONHASHSEED"] = str(seed)
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
-    os.environ["NCCL_DETERMINISTIC"] = "1"
     os.environ["FLASH_ATTENTION_DETERMINISTIC"] = "1"
     if is_npu_available:
         # The environment variable required to enable deterministic mode on Ascend NPUs.
-        os.environ["NCCL_DETERMINISTIC"] = "true"
+        os.environ["HCCL_DETERMINISTIC"] = "true"
         os.environ["CLOSE_MATMUL_K_SHIFT"] = "1"
 
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    device_manual_seed(seed)
+    device_manual_seed_all(seed)
     torch.use_deterministic_algorithms(True, warn_only=True)
     # Enable CUDNN deterministic mode
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.enabled = False
-    if is_npu_available:
-        torch.npu.manual_seed(seed)
-        torch.npu.manual_seed_all(seed)
 
 
 def prepare_micro_batches(

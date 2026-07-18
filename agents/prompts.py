@@ -333,7 +333,7 @@ PROMPT_PROFILES = {
 
 # ── 模型 → Profile 映射 ─────────────────────────────────────────────────────
 
-_SMALL_PATTERN = re.compile(r"(?:^|[^0-9])(?:4|7|8|14)[Bb]", re.IGNORECASE)
+_SMALL_PATTERN = re.compile(r"(?:^|[^0-9])(?:4|7|8|9|14)[Bb]", re.IGNORECASE)
 
 
 def get_profile(model_name: str | None = None) -> dict:

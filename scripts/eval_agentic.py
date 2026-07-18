@@ -64,7 +64,53 @@ def _resolve_qa_file(path: str) -> str:
 
 # ── 与 SFT/GRPO 一致的配置 ──────────────────────────────────────
 
-AGENTIC_SYSTEM_PROMPT = "你是一个金融文档问答 Agent。通过搜索相关文档来回答用户的问题。"
+AGENTIC_SYSTEM_PROMPT = (
+    "你是一个金融文档问答 Agent。通过搜索相关文档来回答用户的问题。"
+    "每个 assistant 回合最多只能输出一个 <tool_call>；如果需要多个查询，请拆成多个回合。"
+    "一旦需要输出 <answer>，请只给出最短可用答案，不要解释、分析、推导或重复题目。"
+)
+# AGENTIC_SYSTEM_PROMPT = """
+# 你是一个金融文档问答 Agent。你的任务是通过检索金融文档，获得回答问题所需的最少充分证据，并给出最终答案。
+# 【最高优先级规则】
+# 以下规则是不可违反的强制执行规则，其优先级高于一般的检索策略、推理习惯和“进一步确认”的倾向：
+
+# 1. 禁止重复检索
+# 你必须优先使用当前对话中已经获得的证据。
+# 对于已经检索过的事实，禁止再次使用相同查询、近义改写、同义表达、问题重述或更换检索工具进行重复检索。
+
+# 2. 证据充分时必须立即结束
+# 每次获得工具返回结果后，必须首先判断现有证据是否已经足以回答用户问题。
+# 一旦证据充分，必须立即停止所有工具调用，并直接输出：
+# <answer>最终答案</answer>
+
+# 3. 禁止无意义确认
+# 如果已经获得回答问题所需的关键数值、实体、日期、关系或中间结论，禁止为了“确认”“验证”“确保准确”“寻找更多依据”而继续重复检索。
+# """
+
+FINAL_ANSWER_PROMPT = """
+你是一个金融文档问答 Agent，现在已经进入最终作答阶段。
+
+【强制规则】
+1. 工具调用阶段已经结束，禁止继续调用任何工具。
+2. 禁止输出 <tool_call>。
+3. 只能根据对话中已有的工具返回结果和证据，回答最初的问题。
+4. 只输出最短可用答案，不要解释、分析、推导、列举证据或重复题目。
+5. 即使证据不完整，也必须给出当前证据支持的最合理答案。
+6. 最后必须输出且只能以以下格式给出最终结论：
+
+<think>
+
+</think>
+
+<answer>简短最终答案</answer>
+
+严格要求：
+1. <think> 与 </think> 之间必须为空。
+2. <answer> 中只写最终答案，不写分析过程、计算过程、检索过程、证据说明、补充解释或背景信息。
+3. 如果是比较题，只写比较后的对象或结论；如果是数值题，只写数值或单位，不要附加说明。
+4. 禁止在上述标签之前或之后输出任何其他内容。
+"""
+
 
 TOOL_SCHEMAS = [
     {"type": "function", "function": {"name": "keyword_search", "description": "使用关键词匹配（BM25）搜索金融文档", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "搜索查询关键词"}}, "required": ["query"]}}},
@@ -116,7 +162,7 @@ def _load_retrieval(device: str):
         print(f"[eval] Retrieval loaded from {index_dir} on {device}")
 
 
-def _format_tool_results(results: list[dict], max_len: int = 300) -> str:
+def _format_tool_results(results: list[dict], max_len: int = 500) -> str:
     '''格式化检索结果为字符串，截断每条文本到 max_len 字符'''
     parts = []
     for item in results:
@@ -146,25 +192,25 @@ def _keyword_search_results(query: str, top_k=3) -> list[dict]:
     return results
 
 
-def _keyword_search(query: str, top_k=3, max_len=300) -> str:
+def _keyword_search(query: str, top_k=3, max_len=500) -> str:
     return _format_tool_results(_keyword_search_results(query, top_k=top_k), max_len=max_len)
 
 
-def _semantic_search(query: str, top_k=3, max_len=300) -> str:
+def _semantic_search(query: str, top_k=3, max_len=500) -> str:
     from retrieval.semantic_search import semantic_search
 
     results = semantic_search(query, top_k=15, rerank_top_k=top_k)
     return _format_tool_results(results, max_len=max_len)
 
 
-def _graph_search(query: str, top_k=3, max_len=300) -> str:
+def _graph_search(query: str, top_k=3, max_len=500) -> str:
     from retrieval.graph_search import graph_search
 
     results = graph_search(query, top_k=top_k)
     return _format_tool_results(results, max_len=max_len)
 
 
-def _hybrid_search(query: str, tools: list = None, top_k=3, max_len=300) -> str:
+def _hybrid_search(query: str, tools: list = None, top_k=3, max_len=500) -> str:
     tools = tools or ["keyword_search", "semantic_search"]
     if isinstance(tools, str):
         tools = [t.strip() for t in tools.split(",") if t.strip()]
@@ -189,6 +235,51 @@ TOOL_DISPATCH = {
 }
 
 # ── 答案提取与评分 ──────────────────────────────────────────────────
+
+def _has_answer(text: str) -> bool:
+    """判断文本中是否已经包含完整的 <answer>。"""
+    return re.search(
+        r"<answer>.*?</answer>",
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    ) is not None
+
+
+def _ensure_answer_tag(content: str) -> str:
+    """
+    确保最终输出中一定存在 <answer>...</answer>。
+
+    模型正常输出了 <answer> 时保持原样；
+    没有输出时，删除 think/tool_call 后将剩余文本包装成 answer。
+    """
+    content = content.strip()
+
+    if _has_answer(content):
+        return content
+
+    # 去除完整的思考块
+    visible = re.sub(
+        r"<think>.*?</think>\s*",
+        "",
+        content,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    # 去除误生成的工具调用
+    visible = re.sub(
+        r"<tool_call>.*?</tool_call>\s*",
+        "",
+        visible,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    visible = visible.strip()
+
+    # 模型最后一轮仍然只输出 think/tool_call 时的兜底
+    if not visible:
+        visible = "无法根据已有证据确定"
+
+    return f"<answer>{visible}</answer>"
 
 
 def _extract_answer(text: str) -> str:
@@ -215,7 +306,7 @@ def _build_system_prompt_with_tools() -> str:
     tools_text = "\n\n# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>"
     for schema in TOOL_SCHEMAS:
         tools_text += f"\n{json.dumps(schema, ensure_ascii=False)}"
-    tools_text += "\n</tools>\n\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call>"
+    tools_text += "\n</tools>\n\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call>\n\nOnly one <tool_call> is allowed in each assistant turn. If more than one query is needed, use multiple assistant turns."
     return AGENTIC_SYSTEM_PROMPT + tools_text
 
 
@@ -233,8 +324,12 @@ def run_agentic_single(model: str, question: str,
     structured_evidence = []  # 结构化 evidence，用于 tool_call_metrics
     full_trajectory = ""
     num_assistant_turns = 0
+    answered = False
 
-    for turn in range(max_turns):
+    # ---------------------------------------------------------
+    # 前 max_turns - 1 轮允许模型自主调用工具
+    # ---------------------------------------------------------
+    for turn in range(max_turns - 1):
         try:
             # 不能用 agent_chat_json()：这里需要保留原始 XML tool_call/answer 文本，
             # agent_chat_json() 会把回复当 JSON 解析，解析失败时还会丢掉原始工具调用轨迹。
@@ -255,9 +350,10 @@ def run_agentic_single(model: str, question: str,
         full_trajectory += content
 
         # 检查是否有 <tool_call> 标签（hermes 格式）
-        tc_match = re.search(r'<tool_call>\s*(\{.*?\})\s*</tool_call>', content, re.DOTALL)
-        if tc_match:
+        tc_matches = list(re.finditer(r'<tool_call>\s*(\{.*?\})\s*</tool_call>', content, re.DOTALL))
+        if tc_matches:
             try:
+                tc_match = tc_matches[0] # 只取第一个 <tool_call>
                 tc_data = json.loads(tc_match.group(1))
                 fn_name = tc_data.get("name", "")
                 fn_args = tc_data.get("arguments", {})
@@ -277,16 +373,70 @@ def run_agentic_single(model: str, question: str,
                     "results": [{"chunk_id": cid} for cid in chunk_ids],
                 })
 
-                messages.append({"role": "assistant", "content": content})
+                # 只保留第一个 tool_call 及其之前的内容，避免同一 assistant turn 的多工具调用污染下一轮历史。
+                assistant_content = content[:tc_match.end()].strip()
+                messages.append({"role": "assistant", "content": assistant_content})
                 messages.append({"role": "user", "content": f"<tool_response>\n{result}\n</tool_response>"})
                 full_trajectory += f"\n[tool:{fn_name}] {result[:200]}...\n"
+                if len(tc_matches) > 1:
+                    full_trajectory += f"\n[warn] multiple_tool_calls_in_one_turn={len(tc_matches)}; kept_first_only\n"
                 continue
             except (json.JSONDecodeError, TypeError):
                 pass
 
         # 没有 tool_call → 最终回答
-        messages.append({"role": "assistant", "content": content})
+        final_content = _ensure_answer_tag(content)
+        messages.append({"role": "assistant", "content": final_content})
+        full_trajectory += final_content
+        answered = True
         break
+    
+    # ---------------------------------------------------------
+    # 前 max_turns - 1 轮没有拿到答案：
+    # 使用第 max_turns 轮强制 Final Answer
+    # ---------------------------------------------------------
+    if not answered:
+        final_messages = [message.copy() for message in messages]
+        if final_messages and final_messages[-1].get("role") == "user":
+            original_content = final_messages[-1].get("content", "")
+
+            final_messages[-1]["content"] = (
+                original_content.rstrip()
+                + "\n\n"
+                + FINAL_ANSWER_PROMPT.strip()
+            )
+        else:
+            # 正常情况下最后一条消息应当是包含 tool_response 的 user 消息。
+            # 这里只是异常兜底。
+            final_messages.append({
+                "role": "user",
+                "content": FINAL_ANSWER_PROMPT.strip(),
+            })
+
+        try:
+            resp = config.client.chat.completions.create(
+                model=config.model_name,
+                messages=final_messages,
+                temperature=0.2, # 最后一轮尽量稳定，不再进行随机探索
+                max_tokens=128, # 答案要简短
+            )
+
+            content = resp.choices[0].message.content or ""
+            final_content = _ensure_answer_tag(content)
+
+            num_assistant_turns += 1
+
+        except Exception as e:
+            # API 异常时也给结果文件留下合法 answer，
+            # 避免 _extract_answer() 误取工具结果最后一行。
+            full_trajectory += (
+                f"\n[ERROR] final answer turn failed: {e}\n"
+            )
+            final_content = (
+                "<answer>无法根据已有证据确定</answer>"
+            )
+
+        full_trajectory += final_content   
 
     return {
         "trajectory": full_trajectory,
@@ -302,7 +452,7 @@ def run_agentic_single(model: str, question: str,
 
 def main():
     parser = argparse.ArgumentParser(description="Agentic evaluation")
-    parser.add_argument("--model", default='Qwen3-4B')
+    parser.add_argument("--model", default='Qwen3.5-4B')
     parser.add_argument("--max-samples", type=int, default=982) # 训练 797 + 测试 185
     # 单个问题最多允许模型进行多少轮 assistant 回复
     parser.add_argument("--max-turns", type=int, default=7)

@@ -1,8 +1,8 @@
-model_name_or_path: /data/lzl/workspace/AgenticRAG/models/Qwen3-4B
-adapter_name_or_path: /data/lzl/workspace/AgenticRAG/training/outputs/Qwen3-4B-sft-zh/checkpoint-90
+model_name_or_path: /data/lzl/workspace/AgenticRAG/models/Qwen3.5-4B
+adapter_name_or_path: /data/lzl/workspace/AgenticRAG/training/outputs/Qwen3.5-4B-sft-zh/checkpoint-90
 template: qwen3_nothink
 finetuning_type: lora
-export_dir: /data/lzl/workspace/AgenticRAG/models/Qwen3-4B-sft-zh
+export_dir: /data/lzl/workspace/AgenticRAG/models/Qwen3.5-4B-sft-zh
 export_size: 2 # 单个权重文件大小（GB）
 export_device: cuda:3
 export_legacy_format: false
